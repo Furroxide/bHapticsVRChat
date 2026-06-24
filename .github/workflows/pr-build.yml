@@ -181,6 +181,13 @@ jobs:
           repos: |
             https://vcc.vrcfury.com/
 
+      - name: Remove unused VRChat SDK samples
+        shell: bash
+        run: |
+          rm -rf \
+            Unity/Packages/com.vrchat.avatars/Samples \
+            Unity/Packages/com.vrchat.avatars/Samples.meta
+
       - name: Export Unity package
         uses: game-ci/unity-builder@v4
         env:
