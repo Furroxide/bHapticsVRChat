@@ -76,6 +76,91 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  comment-pr-artifacts:
+    name: Comment PR artifacts
+    runs-on: ubuntu-latest
+    needs: build-exe
+    timeout-minutes: 10
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Update PR artifact comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- bhaptics-pr-artifacts -->';
+            const { owner, repo } = context.repo;
+            const pull = context.payload.pull_request;
+
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+              owner,
+              repo,
+              run_id: context.runId,
+              per_page: 100,
+            });
+
+            const wantedArtifacts = [
+              { name: 'bHapticsOSC.exe', label: 'bHapticsOSC.exe' },
+              { name: 'bHapticsOSC-VRChat.unitypackage', label: 'bHapticsOSC-VRChat.unitypackage' },
+            ];
+
+            const artifactRows = wantedArtifacts.map(({ name, label }) => {
+              const artifact = artifacts.find(item => item.name === name && !item.expired);
+              if (!artifact) {
+                core.warning(`Expected artifact was not found: ${name}`);
+                return `| ${label} | Not found in this run |`;
+              }
+
+              const artifactUrl = `https://github.com/${owner}/${repo}/actions/runs/${context.runId}/artifacts/${artifact.id}`;
+              return `| ${label} | [Download artifact](${artifactUrl}) |`;
+            });
+
+            const body = [
+              marker,
+              'PR build artifacts are ready.',
+              '',
+              '| Artifact | Link |',
+              '| --- | --- |',
+              ...artifactRows,
+              '',
+              `Workflow run: [${context.workflow} #${context.runNumber}](https://github.com/${owner}/${repo}/actions/runs/${context.runId})`,
+              `Commit: \`${context.sha.slice(0, 7)}\``,
+              '',
+              'Artifacts are temporary and expire according to the repository retention policy.',
+            ].join('\n');
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number: pull.number,
+              per_page: 100,
+            });
+
+            const existing = comments.find(comment =>
+              comment.user?.type === 'Bot' && comment.body?.includes(marker)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pull.number,
+                body,
+              });
+            }
+
   build-unity-package:
     name: Build Unity package (manual)
     runs-on: ubuntu-latest
