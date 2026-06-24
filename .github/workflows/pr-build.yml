@@ -162,11 +162,10 @@ jobs:
             }
 
   build-unity-package:
-    name: Build Unity package (manual)
+    name: Build Unity package
     runs-on: ubuntu-latest
     needs: audit-tracked-artifacts
     timeout-minutes: 60
-    if: ${{ github.event_name == 'workflow_dispatch' }}
     environment: unity-pr-artifacts
 
     steps:
