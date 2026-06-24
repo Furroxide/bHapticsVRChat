@@ -27,6 +27,14 @@ bHaptics VRChatOSC is licensed under the GPL-3.0 License.
   - Unity must not already have the project open when using the CLI export.
   - VRChat SDK and VRCFury remain external VCC/VPM dependencies and are not bundled into the `.unitypackage`.
 
+### Build Artifacts
+- Release downloads are attached to GitHub Releases manually for now. The user-facing download link remains `https://github.com/bhaptics/VRChatOSC/releases/latest/download/bHapticsOSC.exe`.
+- Pull requests targeting `main` build temporary artifacts for review automatically:
+  - `bHapticsOSC.exe` containing the Windows output folder with the executable and runtime DLLs.
+- `bHapticsOSC-VRChat.unitypackage` is built only from a manual `workflow_dispatch` run on a trusted PR ref because it uses Unity credentials.
+- The PR artifact workflow updates one sticky pull request comment with artifact links after a successful automatic or manual build.
+- Unity package CI uses GameCI with Unity `2022.3.22f1`. Configure `UNITY_LICENSE`, `UNITY_EMAIL`, and `UNITY_PASSWORD` for the `unity-pr-artifacts` environment as required by your Unity license type.
+
 ### Links
 - [How to play VRChat with bHaptics](https://bhaptics.notion.site/How-to-play-VRChat-with-bHaptics-1226d5724b8b80229ab9e0001ab70b61)
 - [bHaptics Avatar World](https://vrchat.com/home/world/wrld_7b1fed5e-50da-4263-b68a-81344fab1ac7)
