@@ -11,10 +11,6 @@
     }
   },
   "locked": {
-    "com.vrcfury.temp": {
-      "version": "0.0.0",
-      "dependencies": {}
-    },
     "com.vrcfury.vrcfury": {
       "version": "1.1341.0",
       "dependencies": {}
