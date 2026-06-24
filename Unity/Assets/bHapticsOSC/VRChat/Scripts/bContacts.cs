@@ -1,5 +1,6 @@
-﻿#if UNITY_EDITOR && VRC_SDK_VRCSDK3 && bHapticsOSC_HasAac
+#if UNITY_EDITOR && VRC_SDK_VRCSDK3 && bHapticsOSC_HasVrcFury
 using System.Collections.Generic;
+using UnityEditor;
 using VRC.Dynamics;
 
 namespace bHapticsOSC.VRChat
@@ -58,11 +59,13 @@ namespace bHapticsOSC.VRChat
 
                 foreach (ContactReceiver contactReceiver in settings.CurrentPrefab.GetComponentsInChildren<ContactReceiver>(true))
                 {
+                    Undo.RecordObject(contactReceiver, $"[{bHapticsOSCIntegration.SystemName}] Applied Contact Tags");
                     foreach (string tag in contactReceiver.collisionTags.ToArray())
                         if (!DefaultTags.Contains(tag))
                             contactReceiver.collisionTags.Remove(tag);
 
                     contactReceiver.collisionTags.AddRange(settings.CustomContactTags);
+                    EditorUtility.SetDirty(contactReceiver);
                 }
             }
         }

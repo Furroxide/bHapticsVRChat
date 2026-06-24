@@ -1,4 +1,4 @@
-﻿#if UNITY_EDITOR && VRC_SDK_VRCSDK3 && bHapticsOSC_HasAac
+#if UNITY_EDITOR && VRC_SDK_VRCSDK3 && bHapticsOSC_HasVrcFury
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.Sprites;
@@ -282,7 +282,6 @@ namespace bHapticsOSC.VRChat
 
         public enum HelpBoxType
         {
-            NoFXLayer,
             NotReadyToApply,
         }
         public static void DrawHelpBox(HelpBoxType type, string additionalText = null)
@@ -292,11 +291,6 @@ namespace bHapticsOSC.VRChat
 
             switch (type)
             {
-                case HelpBoxType.NoFXLayer:
-                    messageType = MessageType.Error;
-                    msg = "No Custom FX Layer Found!\nIt is required that the Avatar have some form of non-default FX Layer set.";
-                    goto default;
-
                 case HelpBoxType.NotReadyToApply:
                     messageType = MessageType.Warning;
                     msg = "Nothing is Added!\nPlease add at least 1 Device to Integrate into the Avatar.";

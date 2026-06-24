@@ -1,4 +1,4 @@
-﻿#if UNITY_EDITOR && VRC_SDK_VRCSDK3 && bHapticsOSC_HasAac
+#if UNITY_EDITOR && VRC_SDK_VRCSDK3 && bHapticsOSC_HasVrcFury
 using UnityEngine;
 
 namespace bHapticsOSC.VRChat

@@ -38,7 +38,13 @@ dlldata.c
 *_i.h
 *.ilk
 *.meta
+!Unity/Assets/bHapticsOSC.meta
+!Unity/Assets/bHapticsOSC/VRChat.meta
+!Unity/Assets/bHapticsOSC/VRChat/**/*.meta
+Unity/Assets/bHapticsOSC/VRChat/Generated/
+Unity/Assets/bHapticsOSC/VRChat/Generated.meta
 *.obj
+!Unity/Assets/**/*.obj
 *.pch
 *.pdb
 *.pgc
@@ -192,3 +198,8 @@ bin
 obj
 
 .idea/
+dist/
+Unity/.vscode/
+Unity/*.csproj
+Unity/*.slnx
+/ignore.conf

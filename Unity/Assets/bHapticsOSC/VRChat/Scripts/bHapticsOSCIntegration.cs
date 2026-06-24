@@ -1,8 +1,6 @@
-#if UNITY_EDITOR && VRC_SDK_VRCSDK3 && bHapticsOSC_HasAac
+#if UNITY_EDITOR && VRC_SDK_VRCSDK3 && bHapticsOSC_HasVrcFury
 using UnityEngine;
 using UnityEditor;
-using UnityEditor.Animations;
-using AnimatorAsCode.V0;
 using VRC.SDK3.Avatars.Components;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,6 +13,8 @@ namespace bHapticsOSC.VRChat
     public class bHapticsOSCIntegration : MonoBehaviour
     {
         public static string SystemName = "bHapticsOSC";
+        public const string VrcFuryRootName = "bHapticsOSC VRCFury";
+        public const string GeneratedAssetsRoot = "Assets/bHapticsOSC/VRChat/Generated";
 
         [SerializeField]
         public VRCAvatarDescriptor avatar;
@@ -29,9 +29,6 @@ namespace bHapticsOSC.VRChat
         public Dictionary<bDeviceTemplate, bUserSettings> AllUserSettings;
         [SerializeField]
         public Dictionary<bUserSettings, bReorderableListContainer<string>> AllCustomContactTagsContainers;
-
-        public VRCAvatarDescriptor.CustomAnimLayer fx_layer;
-        public AnimatorController animatorControllerClone;
 
         //private static int AudioLinkCost = 8;
         //[SerializeField]
@@ -63,23 +60,63 @@ namespace bHapticsOSC.VRChat
             }
 
             if (string.IsNullOrEmpty(assetKey) || string.IsNullOrEmpty(assetKey.Trim()))
-                assetKey = GUID.Generate().ToString();
+                assetKey = CreateStableAssetKey();
         }
 
-		public AacFlBase CreateAnimatorAsCode()
-		{
-			AacFlBase aac = AacV0.Create(new AacConfiguration
-			{
-				SystemName = SystemName,
-				AvatarDescriptor = avatar,
-				AnimatorRoot = transform,
-				DefaultValueRoot = transform,
-				AssetContainer = animatorControllerClone,
-				AssetKey = assetKey,
-				DefaultsProvider = new AacDefaultsProvider(false)
-			});
-			return aac;
-		}
+        private string CreateStableAssetKey()
+        {
+            string globalId = GlobalObjectId.GetGlobalObjectIdSlow(gameObject).ToString();
+            if (!string.IsNullOrWhiteSpace(globalId) && !globalId.Contains("Null"))
+                return globalId;
+
+            return $"{gameObject.scene.name}_{gameObject.name}";
+        }
+
+        public Transform GetOrCreateVrcFuryRoot(bool registerUndo = false)
+        {
+            Transform existing = transform.Find(VrcFuryRootName);
+            if (existing != null)
+            {
+                EnsureVrcFurySetup(existing, registerUndo);
+                return existing;
+            }
+
+            GameObject root = new GameObject(VrcFuryRootName);
+            if (registerUndo)
+            {
+                Undo.RegisterCreatedObjectUndo(root, $"[{SystemName}] Created VRCFury Root");
+                Undo.SetTransformParent(root.transform, transform, $"[{SystemName}] Created VRCFury Root");
+            }
+            else
+            {
+                root.transform.SetParent(transform, false);
+            }
+
+            root.transform.localPosition = Vector3.zero;
+            root.transform.localRotation = Quaternion.identity;
+            root.transform.localScale = Vector3.one;
+            EnsureVrcFurySetup(root.transform, registerUndo);
+            return root.transform;
+        }
+
+        public bVrcFurySetup ConfigureVrcFurySetup(string generatedAssetFolderPath, bool registerUndo = false)
+        {
+            Transform root = GetOrCreateVrcFuryRoot(registerUndo);
+            bVrcFurySetup setup = EnsureVrcFurySetup(root, registerUndo);
+            setup.Configure(generatedAssetFolderPath);
+            return setup;
+        }
+
+        private static bVrcFurySetup EnsureVrcFurySetup(Transform root, bool registerUndo)
+        {
+            bVrcFurySetup setup = root.GetComponent<bVrcFurySetup>();
+            if (setup != null)
+                return setup;
+
+            return registerUndo
+                ? Undo.AddComponent<bVrcFurySetup>(root.gameObject)
+                : root.gameObject.AddComponent<bVrcFurySetup>();
+        }
 
         public bool IsReadyToApply()
         {
@@ -102,7 +139,7 @@ namespace bHapticsOSC.VRChat
                 bDeviceTemplate template = deviceTemplates.Values.ElementAt(i);
                 if (!template.HasBone)
                     continue;
-                AllUserSettings[template].FindExistingPrefab(template);
+                AllUserSettings[template].FindExistingPrefab(this, template);
             }
         }
     }

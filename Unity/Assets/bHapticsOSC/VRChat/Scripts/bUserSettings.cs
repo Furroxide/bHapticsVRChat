@@ -1,4 +1,4 @@
-﻿#if UNITY_EDITOR && VRC_SDK_VRCSDK3 && bHapticsOSC_HasAac
+#if UNITY_EDITOR && VRC_SDK_VRCSDK3 && bHapticsOSC_HasVrcFury
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -50,20 +50,24 @@ namespace bHapticsOSC.VRChat
             }
         }
 
-        public void FindExistingPrefab(bDeviceTemplate device)
+        public void FindExistingPrefab(bHapticsOSCIntegration editorComp, bDeviceTemplate device)
         {
             if (CurrentPrefab != null)
                 return;
             foreach (GameObject obj in (GameObject[])FindObjectsOfType(typeof(GameObject)))
             {
+                if (!obj.transform.IsChildOf(editorComp.transform))
+                    continue;
+
                 if (!PrefabUtility.IsPartOfAnyPrefab(obj))
                     continue;
 
                 Object objPrefab = PrefabUtility.GetCorrespondingObjectFromOriginalSource(obj);
-                if ((objPrefab != device.Prefab) && (objPrefab != device.PrefabMesh))
+                if (!TryGetPrefabMode(objPrefab, device, out bool showMesh, out bool isMobile))
                     continue;
 
-                _showMesh = (objPrefab == device.PrefabMesh);
+                _showMesh = showMesh;
+                _isMobile = isMobile;
                 //if (_showMesh)
                 //    bShader.GetTouchViewColors(device.ShaderIndex, obj, ref TouchView_Default, ref TouchView_Triggered);
 
@@ -75,24 +79,31 @@ namespace bHapticsOSC.VRChat
             }
         }
 
-        public void SwapPrefabs(Animator animator, GameObject newPrefab, bool resetTransform = false)
+        public void SwapPrefabs(bHapticsOSCIntegration editorComp, GameObject newPrefab, bool resetTransform = false)
         {
+            if (newPrefab == null)
+                return;
+
             if (CurrentPrefab != null)
                 Undo.RecordObject(CurrentPrefab, $"[{bHapticsOSCIntegration.SystemName}] Swapped Prefabs");
 
-            Transform parent = animator.GetBoneTransform(Bone);
+            Transform stagingRoot = editorComp.GetOrCreateVrcFuryRoot(true);
             GameObject spawnedPrefab = (GameObject)PrefabUtility.InstantiatePrefab(newPrefab);
 
             Undo.RegisterCreatedObjectUndo(spawnedPrefab, $"[{bHapticsOSCIntegration.SystemName}] Swapped Prefabs");
-            Undo.SetTransformParent(spawnedPrefab.transform, parent, $"[{bHapticsOSCIntegration.SystemName}] Swapped Prefabs");
+            Undo.SetTransformParent(spawnedPrefab.transform, stagingRoot, $"[{bHapticsOSCIntegration.SystemName}] Swapped Prefabs");
 
-            GameObject baseObj = newPrefab;
+            Vector3 localPosition = newPrefab.transform.localPosition;
+            Vector3 localEulerAngles = newPrefab.transform.localEulerAngles;
+            Vector3 localScale = newPrefab.transform.localScale;
             if (!resetTransform && (CurrentPrefab != null))
-                baseObj = CurrentPrefab;
+            {
+                localPosition = GetBoneLocalPosition(editorComp.avatarAnimator);
+                localEulerAngles = GetBoneLocalEulerAngles(editorComp.avatarAnimator);
+                localScale = GetBoneLocalScale(editorComp.avatarAnimator);
+            }
 
-            spawnedPrefab.transform.localPosition = baseObj.transform.localPosition;
-            spawnedPrefab.transform.localEulerAngles = baseObj.transform.localEulerAngles;
-            spawnedPrefab.transform.localScale = baseObj.transform.localScale;
+            ApplyBoneLocalTransform(editorComp.avatarAnimator, spawnedPrefab.transform, localPosition, localEulerAngles, localScale);
 
             string[] currentTags = CustomContactTags.ToArray();
 
@@ -111,6 +122,142 @@ namespace bHapticsOSC.VRChat
             TouchView_Triggered = currentTouchViewTriggered;
 
             CurrentPrefab = spawnedPrefab;
+        }
+
+        public void MoveToStagingRoot(bHapticsOSCIntegration editorComp, bool registerUndo)
+        {
+            if (CurrentPrefab == null)
+                return;
+
+            Transform stagingRoot = editorComp.GetOrCreateVrcFuryRoot(registerUndo);
+            if (CurrentPrefab.transform.parent == stagingRoot)
+                return;
+
+            Vector3 worldPosition = CurrentPrefab.transform.position;
+            Quaternion worldRotation = CurrentPrefab.transform.rotation;
+            Vector3 worldScale = CurrentPrefab.transform.lossyScale;
+
+            if (registerUndo)
+            {
+                Undo.SetTransformParent(CurrentPrefab.transform, stagingRoot, $"[{bHapticsOSCIntegration.SystemName}] Moved Device to VRCFury Root");
+            }
+            else
+            {
+                CurrentPrefab.transform.SetParent(stagingRoot, true);
+            }
+
+            CurrentPrefab.transform.position = worldPosition;
+            CurrentPrefab.transform.rotation = worldRotation;
+            SetWorldScale(CurrentPrefab.transform, worldScale);
+        }
+
+        public Vector3 GetBoneLocalPosition(Animator animator)
+        {
+            if (CurrentPrefab == null)
+                return Vector3.zero;
+
+            Transform bone = animator == null ? null : animator.GetBoneTransform(Bone);
+            return bone == null ? CurrentPrefab.transform.localPosition : bone.InverseTransformPoint(CurrentPrefab.transform.position);
+        }
+
+        public Vector3 GetBoneLocalEulerAngles(Animator animator)
+        {
+            if (CurrentPrefab == null)
+                return Vector3.zero;
+
+            Transform bone = animator == null ? null : animator.GetBoneTransform(Bone);
+            Quaternion localRotation = bone == null
+                ? CurrentPrefab.transform.localRotation
+                : Quaternion.Inverse(bone.rotation) * CurrentPrefab.transform.rotation;
+            return localRotation.eulerAngles;
+        }
+
+        public Vector3 GetBoneLocalScale(Animator animator)
+        {
+            if (CurrentPrefab == null)
+                return Vector3.one;
+
+            Transform bone = animator == null ? null : animator.GetBoneTransform(Bone);
+            return bone == null
+                ? CurrentPrefab.transform.localScale
+                : Divide(CurrentPrefab.transform.lossyScale, bone.lossyScale);
+        }
+
+        public void SetBoneLocalPosition(Animator animator, Vector3 localPosition)
+            => SetBoneLocalTransform(animator, localPosition, GetBoneLocalEulerAngles(animator), GetBoneLocalScale(animator));
+
+        public void SetBoneLocalEulerAngles(Animator animator, Vector3 localEulerAngles)
+            => SetBoneLocalTransform(animator, GetBoneLocalPosition(animator), localEulerAngles, GetBoneLocalScale(animator));
+
+        public void SetBoneLocalScale(Animator animator, Vector3 localScale)
+            => SetBoneLocalTransform(animator, GetBoneLocalPosition(animator), GetBoneLocalEulerAngles(animator), localScale);
+
+        public void SetBoneLocalTransform(Animator animator, Vector3 localPosition, Vector3 localEulerAngles, Vector3 localScale)
+        {
+            if (CurrentPrefab == null)
+                return;
+
+            ApplyBoneLocalTransform(animator, CurrentPrefab.transform, localPosition, localEulerAngles, localScale);
+        }
+
+        private void ApplyBoneLocalTransform(Animator animator, Transform target, Vector3 localPosition, Vector3 localEulerAngles, Vector3 localScale)
+        {
+            Transform bone = animator == null ? null : animator.GetBoneTransform(Bone);
+            if (bone == null)
+            {
+                target.localPosition = localPosition;
+                target.localEulerAngles = localEulerAngles;
+                target.localScale = localScale;
+                return;
+            }
+
+            target.position = bone.TransformPoint(localPosition);
+            target.rotation = bone.rotation * Quaternion.Euler(localEulerAngles);
+            SetWorldScale(target, Vector3.Scale(bone.lossyScale, localScale));
+        }
+
+        private static void SetWorldScale(Transform target, Vector3 worldScale)
+        {
+            Transform parent = target.parent;
+            target.localScale = parent == null ? worldScale : Divide(worldScale, parent.lossyScale);
+        }
+
+        private static Vector3 Divide(Vector3 left, Vector3 right)
+        {
+            return new Vector3(
+                right.x == 0 ? 0 : left.x / right.x,
+                right.y == 0 ? 0 : left.y / right.y,
+                right.z == 0 ? 0 : left.z / right.z);
+        }
+
+        private static bool TryGetPrefabMode(Object objPrefab, bDeviceTemplate device, out bool showMesh, out bool isMobile)
+        {
+            showMesh = false;
+            isMobile = false;
+
+            if (objPrefab == device.Prefab)
+                return true;
+
+            if (objPrefab == device.PrefabMesh)
+            {
+                showMesh = true;
+                return true;
+            }
+
+            if (objPrefab == device.PrefabMobile)
+            {
+                isMobile = true;
+                return true;
+            }
+
+            if (objPrefab == device.PrefabMeshMobile)
+            {
+                showMesh = true;
+                isMobile = true;
+                return true;
+            }
+
+            return false;
         }
 
         public void SelectCurrentPrefab()
