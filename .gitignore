@@ -203,3 +203,14 @@ Unity/.vscode/
 Unity/*.csproj
 Unity/*.slnx
 /ignore.conf
+
+# Release and CI build artifacts
+/artifacts/
+/Tools/*.exe
+/Tools/*.dll
+/Tools/*.pdb
+/*.exe
+/*.unitypackage
+/External/bHapticsOSC/Output/
+/External/bHapticsOSC/**/[Bb]in/
+/External/bHapticsOSC/**/[Oo]bj/

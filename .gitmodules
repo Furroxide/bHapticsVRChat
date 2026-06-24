@@ -1,0 +1,3 @@
+[submodule "External/bHapticsOSC"]
+	path = External/bHapticsOSC
+	url = https://github.com/HerpDerpinstine/bHapticsOSC.git
