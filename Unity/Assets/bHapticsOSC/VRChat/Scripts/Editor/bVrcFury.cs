@@ -124,12 +124,24 @@ namespace bHapticsOSC.VRChat
 
         private static object InvokeReflected(Type type, object target, string methodName, params object[] args)
         {
-            MethodInfo method = type.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance)
-                .FirstOrDefault(candidate => candidate.Name == methodName && ParametersMatch(candidate, args));
+            MethodInfo[] matches = type.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance)
+                .Where(candidate =>
+                    candidate.Name == methodName &&
+                    candidate.IsStatic == (target == null) &&
+                    ParametersMatch(candidate, args))
+                .ToArray();
 
-            if (method == null)
+            if (matches.Length == 0)
                 throw new MissingMethodException(type.FullName, methodName);
 
+            if (matches.Length > 1)
+            {
+                string matchingOverloads = string.Join("; ", matches.Select(FormatMethodSignature));
+                throw new AmbiguousMatchException(
+                    $"Ambiguous VRCFury API method match for {FormatMethodCall(type, methodName, args)}. Matching overloads: {matchingOverloads}.");
+            }
+
+            MethodInfo method = matches[0];
             return method.Invoke(target, args);
         }
 
@@ -151,6 +163,19 @@ namespace bHapticsOSC.VRChat
             }
 
             return true;
+        }
+
+        private static string FormatMethodCall(Type type, string methodName, object[] args)
+            => $"{type.FullName}.{methodName}({FormatArgumentTypes(args)})";
+
+        private static string FormatArgumentTypes(object[] args)
+            => string.Join(", ", args.Select(arg => arg == null ? "null" : arg.GetType().FullName));
+
+        private static string FormatMethodSignature(MethodInfo method)
+        {
+            ParameterInfo[] parameters = method.GetParameters();
+            string parameterTypes = string.Join(", ", parameters.Select(parameter => parameter.ParameterType.FullName));
+            return $"{method.DeclaringType.FullName}.{method.Name}({parameterTypes})";
         }
 
         private static void CaptureVrcFuryComponents(
