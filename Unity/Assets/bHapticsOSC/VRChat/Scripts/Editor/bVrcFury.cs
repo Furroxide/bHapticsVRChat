@@ -33,6 +33,8 @@ namespace bHapticsOSC.VRChat
                 object fullController = InvokeStatic(furyComponentsType, "CreateFullController", root.gameObject);
                 Invoke(fullController, "AddController", generatedAssets.Controller, VRCAvatarDescriptor.AnimLayerType.FX);
                 Invoke(fullController, "AddParams", generatedAssets.Parameters);
+                if (generatedAssets.CreditsMenu != null)
+                    Invoke(fullController, "AddMenu", generatedAssets.CreditsMenu, bAnimator.RootMenuPath);
                 Invoke(fullController, "AddGlobalParam", "bOSC/*");
                 Invoke(fullController, "AddGlobalParam", "bOSC_v1_*");
                 AddSavedDefaultOnToggle(

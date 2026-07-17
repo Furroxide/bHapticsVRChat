@@ -14,6 +14,7 @@ namespace bHapticsOSC.VRChat
     {
         public AnimatorController Controller;
         public VRCExpressionParameters Parameters;
+        internal VRCExpressionsMenu CreditsMenu;
         public string FolderPath;
         public bool HasDeviceMeshToggle;
         public bool HasMotorMeshToggle;
@@ -22,6 +23,8 @@ namespace bHapticsOSC.VRChat
 
     public static class bAnimator
     {
+        internal const string RootMenuPath = "bHapticsOSC";
+        private const string MaintainerCreditLabel = "Maintained by Furroxide";
         public const string DeviceMeshToggleParameter = "bHapticsOSC/DeviceMeshes";
         public const string DeviceMeshToggleMenuPath = "bHapticsOSC/Device Meshes";
         public const string MotorMeshToggleParameter = "bHapticsOSC/MotorMeshes";
@@ -79,6 +82,7 @@ namespace bHapticsOSC.VRChat
                 "MotorMeshes",
                 includeMotors: true);
             VRCExpressionParameters parameters = CreateExpressionParameters(folderPath, expressionParameters);
+            VRCExpressionsMenu creditsMenu = CreateCreditsMenu(folderPath);
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -87,6 +91,7 @@ namespace bHapticsOSC.VRChat
             {
                 Controller = controller,
                 Parameters = parameters,
+                CreditsMenu = creditsMenu,
                 FolderPath = folderPath,
                 HasDeviceMeshToggle = hasDeviceMeshToggle,
                 HasMotorMeshToggle = hasMotorMeshToggle,
@@ -364,6 +369,27 @@ namespace bHapticsOSC.VRChat
 
             AssetDatabase.CreateAsset(expressionParameters, $"{folderPath}/{bHapticsOSCIntegration.SystemName}.parameters.asset");
             return expressionParameters;
+        }
+
+        private static VRCExpressionsMenu CreateCreditsMenu(string folderPath)
+        {
+            var menu = ScriptableObject.CreateInstance<VRCExpressionsMenu>();
+            menu.controls = new List<VRCExpressionsMenu.Control>
+            {
+                new VRCExpressionsMenu.Control
+                {
+                    name = MaintainerCreditLabel,
+                    type = VRCExpressionsMenu.Control.ControlType.Button,
+                    parameter = new VRCExpressionsMenu.Control.Parameter
+                    {
+                        name = string.Empty
+                    },
+                    value = 1f
+                }
+            };
+
+            AssetDatabase.CreateAsset(menu, $"{folderPath}/{bHapticsOSCIntegration.SystemName}.menu.asset");
+            return menu;
         }
 
         private static string PrepareGeneratedFolder(bHapticsOSCIntegration editorComp)
