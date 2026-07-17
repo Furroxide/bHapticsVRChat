@@ -1,4 +1,4 @@
-﻿#if UNITY_EDITOR
+#if UNITY_EDITOR
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -10,6 +10,9 @@ namespace bHapticsOSC.VRChat
     [InitializeOnLoad]
     public class bImportChecker : Editor
     {
+        private static string LegacyHasDependencyDefine => "bHapticsOSC_Has" + "A" + "ac";
+        private static string LegacyWarningDefine => "bHapticsOSC_" + "A" + "acWarning";
+
         static bImportChecker() =>
             Refresh();
 
@@ -25,7 +28,7 @@ namespace bHapticsOSC.VRChat
             bool shouldApplyDefinitions = false;
 
             VRCSDKCheck(ref definitionsTbl, ref shouldApplyDefinitions);
-            AacCheck(ref definitionsTbl, ref shouldApplyDefinitions);
+            VrcFuryCheck(ref definitionsTbl, ref shouldApplyDefinitions);
 
             if (shouldApplyDefinitions)
                 PlayerSettings.SetScriptingDefineSymbolsForGroup(buildTargetGroup, string.Join(";", definitionsTbl.ToArray()));
@@ -62,52 +65,67 @@ namespace bHapticsOSC.VRChat
             Application.OpenURL("https://docs.vrchat.com/docs/setting-up-the-sdk#step-2---importing-the-sdk");
         }
 
-        private static void AacCheck(ref List<string> definitionsTbl, ref bool shouldApplyDefinitions)
+        private static void VrcFuryCheck(ref List<string> definitionsTbl, ref bool shouldApplyDefinitions)
         {
-            if (HasAac())
+            if (definitionsTbl.Remove(LegacyWarningDefine))
+                shouldApplyDefinitions = true;
+            if (definitionsTbl.Remove(LegacyHasDependencyDefine))
+                shouldApplyDefinitions = true;
+
+            if (HasVrcFury())
             {
-                if (!definitionsTbl.Contains("bHapticsOSC_HasAac"))
+                if (!definitionsTbl.Contains("bHapticsOSC_HasVrcFury"))
                 {
-                    definitionsTbl.Add("bHapticsOSC_HasAac");
+                    definitionsTbl.Add("bHapticsOSC_HasVrcFury");
                     shouldApplyDefinitions = true;
                 }
 
-                if (definitionsTbl.Contains("bHapticsOSC_AacWarning"))
+                if (definitionsTbl.Contains("bHapticsOSC_VrcFuryWarning"))
                 {
-                    definitionsTbl.Remove("bHapticsOSC_AacWarning");
+                    definitionsTbl.Remove("bHapticsOSC_VrcFuryWarning");
                     shouldApplyDefinitions = true;
                 }
             }
             else
             {
-                if (definitionsTbl.Contains("bHapticsOSC_HasAac"))
+                if (definitionsTbl.Contains("bHapticsOSC_HasVrcFury"))
                 {
-                    definitionsTbl.Remove("bHapticsOSC_HasAac");
+                    definitionsTbl.Remove("bHapticsOSC_HasVrcFury");
                     shouldApplyDefinitions = true;
                 }
 
-                if (!definitionsTbl.Contains("bHapticsOSC_AacWarning"))
+                if (!definitionsTbl.Contains("bHapticsOSC_VrcFuryWarning"))
                 {
-                    definitionsTbl.Add("bHapticsOSC_AacWarning");
+                    definitionsTbl.Add("bHapticsOSC_VrcFuryWarning");
                     shouldApplyDefinitions = true;
-                    AacWarning();
+                    VrcFuryWarning();
                 }
             }
         }
 
-#if !bHapticsOSC_HasAac
-        [MenuItem("bHapticsOSC/Animator as Code is Required!")]
+#if !bHapticsOSC_HasVrcFury
+        [MenuItem("bHapticsOSC/VRCFury is Required!")]
 #endif
-        private static void AacWarning()
+        private static void VrcFuryWarning()
         {
-            Debug.LogError("bHapticsOSC requires Animator as Code!");
-            EditorUtility.DisplayDialog("bHapticsOSC", "bHapticsOSC requires Animator as Code!\nPlease import it.", "OK");
-            Application.OpenURL("https://bhaptics.notion.site/How-to-play-VRChat-with-bHaptics-1226d5724b8b80229ab9e0001ab70b61");
+            Debug.LogError("bHapticsOSC requires VRCFury!");
+            EditorUtility.DisplayDialog("bHapticsOSC", "bHapticsOSC requires VRCFury!\nPlease install it through VCC.", "OK");
+            Application.OpenURL("https://vrcfury.com/download/");
         }
 
-        private static bool HasAac()
+        private static bool HasVrcFury()
         {
-            try { return Assembly.Load("AnimatorAsCodeFramework") != null; } catch { }
+            foreach (Assembly assembly in System.AppDomain.CurrentDomain.GetAssemblies())
+            {
+                if (assembly.GetType("com.vrcfury.api.FuryComponents") != null)
+                    return true;
+            }
+
+            try
+            {
+                return Assembly.Load("com.vrcfury.api").GetType("com.vrcfury.api.FuryComponents") != null;
+            }
+            catch { }
             return false;
         }
     }

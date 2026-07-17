@@ -1,0 +1,8 @@
+/*
+!.gitignore
+!vpm-manifest.json
+!manifest.json
+!packages-lock.json
+!com.vrcfury.temp/
+com.vrcfury.temp/*
+!com.vrcfury.temp/package.json

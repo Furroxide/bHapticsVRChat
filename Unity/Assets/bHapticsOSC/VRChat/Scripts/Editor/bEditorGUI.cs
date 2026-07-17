@@ -1,11 +1,9 @@
-﻿#if UNITY_EDITOR && VRC_SDK_VRCSDK3 && bHapticsOSC_HasAac
+#if UNITY_EDITOR && VRC_SDK_VRCSDK3 && bHapticsOSC_HasVrcFury
 using System;
 using System.Linq;
 using UnityEngine;
 using System.Collections.Generic;
 using UnityEditor;
-using VRC.SDK3.Avatars.Components;
-using UnityEditor.Animations;
 using UnityEditor.SceneManagement;
 
 namespace bHapticsOSC.VRChat
@@ -14,6 +12,8 @@ namespace bHapticsOSC.VRChat
     public class bEditorGUI : Editor
 	{
 		private bHapticsOSCIntegration editorComp;
+		private string autoFitMessage;
+		private MessageType autoFitMessageType = MessageType.None;
 
 		public override void OnInspectorGUI()
 		{
@@ -24,13 +24,6 @@ namespace bHapticsOSC.VRChat
 			editorComp.Validate();
 			if (editorComp.avatar == null)
 				return;
-
-			editorComp.fx_layer = editorComp.avatar.baseAnimationLayers.FirstOrDefault(x => x.type == VRCAvatarDescriptor.AnimLayerType.FX);
-			if (editorComp.fx_layer.isDefault || (editorComp.fx_layer.animatorController == null))
-			{
-				bGUI.DrawHelpBox(bGUI.HelpBoxType.NoFXLayer);
-				return;
-			}
 
 			if (editorComp.AllUserSettings == null)
             {
@@ -57,8 +50,8 @@ namespace bHapticsOSC.VRChat
 					});
 					
 					
-					newSettings.OnShowMeshChange = thisSettings => thisSettings.SwapPrefabs(editorComp.avatarAnimator, getNewPrefab(thisSettings));
-					newSettings.OnIsMobileChange = thisSettings => thisSettings.SwapPrefabs(editorComp.avatarAnimator, getNewPrefab(thisSettings));
+					newSettings.OnShowMeshChange = thisSettings => thisSettings.SwapPrefabs(editorComp, getNewPrefab(thisSettings));
+					newSettings.OnIsMobileChange = thisSettings => thisSettings.SwapPrefabs(editorComp, getNewPrefab(thisSettings));
 					editorComp.AllUserSettings[template] = newSettings;
 				}
 			}
@@ -148,10 +141,37 @@ namespace bHapticsOSC.VRChat
 					}
 
 					// Transform Editor
-					userSettings.CurrentPrefab.transform.localPosition = bGUI.DrawVector3Field("Position", userSettings.CurrentPrefab.transform.localPosition, userSettings.CurrentPrefab.transform);
-					userSettings.CurrentPrefab.transform.localEulerAngles = bGUI.DrawVector3Field("Rotation", userSettings.CurrentPrefab.transform.localEulerAngles, userSettings.CurrentPrefab.transform);
+					Vector3 localPosition = userSettings.GetBoneLocalPosition(editorComp.avatarAnimator);
+					Vector3 newLocalPosition = bGUI.DrawVector3Field("Position", localPosition, userSettings.CurrentPrefab.transform);
+					if (newLocalPosition != localPosition)
+						userSettings.SetBoneLocalPosition(editorComp.avatarAnimator, newLocalPosition);
 
-					userSettings.CurrentPrefab.transform.localScale = bGUI.DrawVector3Field("Scale", userSettings.CurrentPrefab.transform.localScale, userSettings.CurrentPrefab.transform);
+					Vector3 localEulerAngles = userSettings.GetBoneLocalEulerAngles(editorComp.avatarAnimator);
+					Vector3 newLocalEulerAngles = bGUI.DrawVector3Field("Rotation", localEulerAngles, userSettings.CurrentPrefab.transform);
+					if (newLocalEulerAngles != localEulerAngles)
+						userSettings.SetBoneLocalEulerAngles(editorComp.avatarAnimator, newLocalEulerAngles);
+
+					Vector3 localScale = userSettings.GetBoneLocalScale(editorComp.avatarAnimator);
+					Vector3 newLocalScale = bGUI.DrawVector3Field("Scale", localScale, userSettings.CurrentPrefab.transform);
+					if (newLocalScale != localScale)
+						userSettings.SetBoneLocalScale(editorComp.avatarAnimator, newLocalScale);
+
+					if (bAutoFit.Supports(editorComp.CurrentDevice))
+					{
+						if (bGUI.DrawButton("AUTO FIT"))
+						{
+							bool autoFitApplied = bAutoFit.TryApply(editorComp, editorComp.CurrentDevice, userSettings, out autoFitMessage);
+							autoFitMessageType = autoFitApplied ? MessageType.Info : MessageType.Warning;
+							if (autoFitApplied)
+								EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+						}
+
+						if (!string.IsNullOrEmpty(autoFitMessage))
+						{
+							EditorGUILayout.HelpBox(autoFitMessage, autoFitMessageType);
+							GUILayout.Space(6);
+						}
+					}
 
 					GUILayout.Space(10);
 
@@ -221,31 +241,40 @@ namespace bHapticsOSC.VRChat
 				return;
 			}
 
-			if (bGUI.DrawButton("APPLY INTEGRATION"))
+			if (bGUI.DrawButton("CREATE VRCFURY SETUP"))
 			{
-				EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Cloning FX Layer...", 0);
-				if (!CloneAnimatorAsset())
+				try
 				{
-					EditorUtility.ClearProgressBar();
-					EditorUtility.DisplayDialog(bHapticsOSCIntegration.SystemName, "Unable to Clone Animator Controller!", "OK");
-				}
-				else
-				{
-					EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Modifying Avatar...", 0.5f);
-					ApplySerializedChanges();
-					bAnimator.CreateAllNodes(editorComp);
+					EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Preparing bHaptics objects...", 0.1f);
+					editorComp.GetOrCreateVrcFuryRoot(true);
+					foreach (bUserSettings settings in editorComp.AllUserSettings.Values)
+						settings.MoveToStagingRoot(editorComp, true);
+
+					EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Applying contact tags...", 0.25f);
 					bContacts.ApplyNewTags(editorComp);
 
 					if (bConstraints.ShouldApply(editorComp, bDeviceType.HAND_LEFT, out bUserSettings leftHandSettings)
 						|| bConstraints.ShouldApply(editorComp, bDeviceType.HAND_RIGHT, out bUserSettings rightHandSettings))
 					{
-						EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Applying ParentConstraints...", 0.9f);
+						EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Applying ParentConstraints...", 0.45f);
 						bConstraints.Apply(editorComp);
 					}
 
+					EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Generating VRCFury assets...", 0.65f);
+					bGeneratedAnimatorAssets generatedAssets = bAnimator.CreateGeneratedAssets(editorComp);
+
+					EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Creating VRCFury components...", 0.85f);
+					bVrcFury.Apply(editorComp, generatedAssets);
+
 					EditorUtility.ClearProgressBar();
-					EditorUtility.DisplayDialog(bHapticsOSCIntegration.SystemName, "Integration Complete!\nThe Avatar is now setup for bHapticsOSC support.", "OK");
+					EditorUtility.DisplayDialog(bHapticsOSCIntegration.SystemName, "VRCFury Setup Complete!\nDelete the bHapticsOSC VRCFury object to remove this setup and its generated assets.", "OK");
 					DestroyImmediate(editorComp);
+				}
+				catch (System.Exception e)
+				{
+					EditorUtility.ClearProgressBar();
+					Debug.LogException(e);
+					EditorUtility.DisplayDialog(bHapticsOSCIntegration.SystemName, $"Unable to create VRCFury setup:\n{e.Message}", "OK");
 				}
 			}
 
@@ -255,23 +284,6 @@ namespace bHapticsOSC.VRChat
 				EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
 		}
 
-		private bool CloneAnimatorAsset()
-        {
-			editorComp.animatorControllerClone = (AnimatorController)bAsset.Clone(editorComp.fx_layer.animatorController);
-			return (editorComp.animatorControllerClone != null);
-		}
-
-		private void ApplySerializedChanges()
-		{
-			editorComp.avatarAnimator.runtimeAnimatorController = editorComp.animatorControllerClone;
-
-			SerializedObject avatarObj = new SerializedObject(editorComp.avatar);
-
-			SerializedProperty fxLayerProp = bAvatar.FindAnimationLayerProp(avatarObj, VRCAvatarDescriptor.AnimLayerType.FX);
-			SerializedProperty animatorControllerProp = fxLayerProp.FindPropertyRelative("animatorController");
-			animatorControllerProp.objectReferenceValue = editorComp.animatorControllerClone;
-			avatarObj.ApplyModifiedPropertiesWithoutUndo();
-		}
 	}
 }
 #endif

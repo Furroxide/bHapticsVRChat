@@ -1,4 +1,5 @@
-﻿#if UNITY_EDITOR && VRC_SDK_VRCSDK3 && bHapticsOSC_HasAac
+#if UNITY_EDITOR && VRC_SDK_VRCSDK3 && bHapticsOSC_HasVrcFury
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.Animations;
 
@@ -37,17 +38,20 @@ namespace bHapticsOSC.VRChat
 
 		private static void ApplyContraintSources(this Animator animator, ParentConstraint[] parentConstraints, HumanBodyBones[] bones)
 		{
-			for (int jointIndex = 0; jointIndex < parentConstraints.Length; ++jointIndex)
+			int count = Mathf.Min(parentConstraints.Length, bones.Length);
+			for (int jointIndex = 0; jointIndex < count; ++jointIndex)
 			{
 				var constraintSource = new ConstraintSource();
 				constraintSource.weight = 1f;
 				constraintSource.sourceTransform = animator.GetBoneTransform(bones[jointIndex]);
 				if (constraintSource.sourceTransform != null)
 				{
+					Undo.RecordObject(parentConstraints[jointIndex], $"[{bHapticsOSCIntegration.SystemName}] Applied ParentConstraint Sources");
 					if (parentConstraints[jointIndex].sourceCount <= 0)
 						parentConstraints[jointIndex].AddSource(constraintSource);
 					else
 						parentConstraints[jointIndex].SetSource(0, constraintSource);
+					EditorUtility.SetDirty(parentConstraints[jointIndex]);
 				}
 			}
 		}
