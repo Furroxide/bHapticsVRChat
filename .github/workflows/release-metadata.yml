@@ -1,0 +1,41 @@
+name: Release metadata
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-metadata-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  validate-release-metadata:
+    name: Validate version and changelog
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Validate release metadata
+        shell: pwsh
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./Tools/Validate-ReleaseMetadata.ps1 -BaseRef "origin/$env:BASE_REF"

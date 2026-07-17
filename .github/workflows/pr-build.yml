@@ -23,6 +23,16 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Verify normalized line endings
+        shell: bash
+        run: |
+          git add --renormalize .
+          if ! git diff --cached --quiet; then
+            echo "Files are not normalized according to .gitattributes:"
+            git diff --cached --name-only
+            exit 1
+          fi
+
       - name: Reject committed binary artifacts
         shell: bash
         run: |
@@ -64,15 +74,20 @@ jobs:
               throw "Expected executable was not produced: $exePath"
           }
 
-          $artifactPath = "artifacts\bHapticsOSC"
-          New-Item -ItemType Directory -Force -Path $artifactPath | Out-Null
-          Copy-Item -Path (Join-Path $outputPath '*') -Destination $artifactPath -Recurse
+          $dlls = @(Get-ChildItem -LiteralPath $outputPath -Filter '*.dll' -File)
+          if ($dlls.Count -gt 0) {
+              $names = ($dlls | ForEach-Object { $_.Name }) -join ', '
+              throw "Single-exe packaging failed; DLLs remain in the release output: $names"
+          }
+
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          Copy-Item -LiteralPath $exePath -Destination artifacts\bHapticsOSC.exe
 
       - name: Upload executable artifact
         uses: actions/upload-artifact@v4
         with:
           name: bHapticsOSC.exe
-          path: artifacts/bHapticsOSC/
+          path: artifacts/bHapticsOSC.exe
           if-no-files-found: error
           retention-days: 14
 

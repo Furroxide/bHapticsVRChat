@@ -1,0 +1,20 @@
+# Keep text files consistent across macOS, Windows, and CI.
+* text=auto eol=lf
+
+# Windows command scripts conventionally use CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets must never be line-ending normalized.
+*.dll binary
+*.exe binary
+*.fbx binary
+*.gif binary
+*.jpg binary
+*.jpeg binary
+*.pdb binary
+*.png binary
+*.tga binary
+*.unitypackage binary
+*.wav binary
+*.zip binary
