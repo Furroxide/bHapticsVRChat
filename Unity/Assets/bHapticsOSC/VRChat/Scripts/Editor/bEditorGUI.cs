@@ -253,6 +253,9 @@ namespace bHapticsOSC.VRChat
 					EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Applying contact tags...", 0.25f);
 					bContacts.ApplyNewTags(editorComp);
 
+					EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Preparing punch receivers...", 0.35f);
+					bPunch.ApplyReceivers(editorComp);
+
 					if (bConstraints.ShouldApply(editorComp, bDeviceType.HAND_LEFT, out bUserSettings leftHandSettings)
 						|| bConstraints.ShouldApply(editorComp, bDeviceType.HAND_RIGHT, out bUserSettings rightHandSettings))
 					{

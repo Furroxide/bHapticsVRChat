@@ -13,6 +13,7 @@ namespace bHapticsOSC.VRChat
     {
         private const string FuryComponentsTypeName = "com.vrcfury.api.FuryComponents";
         private const string VrcFuryComponentTypeName = "VF.Model.VRCFury";
+        private const float DefaultSliderValue = 1f;
 
         public static bool IsAvailable => GetFuryComponentsType() != null;
 
@@ -48,6 +49,11 @@ namespace bHapticsOSC.VRChat
                     generatedAssets.HasMotorMeshToggle,
                     bAnimator.MotorMeshToggleMenuPath,
                     bAnimator.MotorMeshToggleParameter);
+                AddPunchControls(
+                    furyComponentsType,
+                    fullController,
+                    root.gameObject,
+                    generatedAssets.HasPunchControls);
 
                 foreach (var pair in bDevice.AllTemplates)
                 {
@@ -95,6 +101,83 @@ namespace bHapticsOSC.VRChat
             Invoke(toggle, "SetDefaultOn");
             Invoke(toggle, "SetSaved");
             Invoke(toggle, "SetGlobalParameter", parameterName);
+        }
+
+        private static void AddPunchControls(Type furyComponentsType, object fullController, GameObject target, bool shouldAdd)
+        {
+            if (!shouldAdd)
+                return;
+
+            AddSavedDefaultOnToggle(
+                furyComponentsType,
+                fullController,
+                target,
+                true,
+                bPunch.EnabledMenuPath,
+                bPunch.EnabledParameter);
+            AddSavedDefaultOnToggle(
+                furyComponentsType,
+                fullController,
+                target,
+                true,
+                bPunch.RippleMenuPath,
+                bPunch.RippleParameter);
+            AddSavedDefaultSlider(
+                furyComponentsType,
+                fullController,
+                target,
+                bPunch.StrengthMenuPath,
+                bPunch.StrengthParameter);
+            AddSavedDefaultSlider(
+                furyComponentsType,
+                fullController,
+                target,
+                bPunch.DurationMenuPath,
+                bPunch.DurationParameter);
+        }
+
+        private static void AddSavedDefaultSlider(Type furyComponentsType, object fullController, GameObject target, string menuPath, string parameterName)
+        {
+            Invoke(fullController, "AddGlobalParam", parameterName);
+
+            object slider = InvokeStatic(furyComponentsType, "CreateToggle", target);
+            Invoke(slider, "SetMenuPath", menuPath);
+            Invoke(slider, "SetSlider", true);
+            SetDefaultSliderValue(slider, DefaultSliderValue);
+            Invoke(slider, "SetSaved");
+            Invoke(slider, "SetGlobalParameter", parameterName);
+        }
+
+        private static void SetDefaultSliderValue(object slider, float value)
+        {
+            MethodInfo publicSetter = slider.GetType().GetMethod(
+                "SetDefaultSliderValue",
+                BindingFlags.Public | BindingFlags.Instance,
+                null,
+                new[] { typeof(float) },
+                null);
+            if (publicSetter != null)
+            {
+                publicSetter.Invoke(slider, new object[] { value });
+                return;
+            }
+
+            // VRCFury 1.1341 exposes SetDefaultOn, but that flag is ignored for
+            // sliders. Fall back to its serialized model until the public API
+            // exposes a slider-default setter.
+            FieldInfo modelField = slider.GetType().GetField("c", BindingFlags.NonPublic | BindingFlags.Instance);
+            object model = modelField?.GetValue(slider);
+            FieldInfo valueField = model?.GetType().GetField(
+                "defaultSliderValue",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (valueField == null || valueField.FieldType != typeof(float))
+            {
+                throw new MissingFieldException(
+                    slider.GetType().FullName,
+                    "defaultSliderValue");
+            }
+
+            valueField.SetValue(model, value);
         }
 
         private static Type GetFuryComponentsType()

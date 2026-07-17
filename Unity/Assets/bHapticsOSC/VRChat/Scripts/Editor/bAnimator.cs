@@ -17,6 +17,7 @@ namespace bHapticsOSC.VRChat
         public string FolderPath;
         public bool HasDeviceMeshToggle;
         public bool HasMotorMeshToggle;
+        public bool HasPunchControls;
     }
 
     public static class bAnimator
@@ -88,7 +89,8 @@ namespace bHapticsOSC.VRChat
                 Parameters = parameters,
                 FolderPath = folderPath,
                 HasDeviceMeshToggle = hasDeviceMeshToggle,
-                HasMotorMeshToggle = hasMotorMeshToggle
+                HasMotorMeshToggle = hasMotorMeshToggle,
+                HasPunchControls = bPunch.HasReceivers(editorComp)
             };
         }
 
