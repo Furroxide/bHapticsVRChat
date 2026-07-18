@@ -116,14 +116,9 @@ function Get-LatestTagVersion {
 }
 
 function Get-BaselineVersion([string]$RequestedBaseRef) {
-    $baseCandidates = @()
-    if (-not [string]::IsNullOrWhiteSpace($RequestedBaseRef)) {
-        $baseCandidates += $RequestedBaseRef
-    }
-
-    $baseCandidates += @('origin/main', 'upstream/main', 'main')
-
-    foreach ($candidate in $baseCandidates) {
+    $hasRequestedBaseRef = -not [string]::IsNullOrWhiteSpace($RequestedBaseRef) -and $RequestedBaseRef.Trim() -notmatch '^0+$'
+    if ($hasRequestedBaseRef) {
+        $candidate = $RequestedBaseRef.Trim()
         $version = Get-GitOutput @('show', "${candidate}:VERSION") -AllowFailure
         if (-not [string]::IsNullOrWhiteSpace($version)) {
             $version = $version.Trim()
@@ -133,6 +128,8 @@ function Get-BaselineVersion([string]$RequestedBaseRef) {
                 Source = "VERSION at $candidate"
             }
         }
+
+        Write-Warning "VERSION is unavailable at $candidate; using the latest semantic version tag as the release baseline."
     }
 
     $tagVersion = Get-LatestTagVersion

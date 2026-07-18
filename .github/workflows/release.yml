@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -34,9 +33,10 @@ jobs:
         id: validate
         shell: pwsh
         env:
+          BASE_REF: ${{ github.event.before }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ./Tools/Validate-ReleaseMetadata.ps1 -BaseRef "HEAD^" -ChangelogEntryPath release-notes.md
+          ./Tools/Validate-ReleaseMetadata.ps1 -BaseRef "$env:BASE_REF" -ChangelogEntryPath release-notes.md
 
       - name: Upload release notes
         uses: actions/upload-artifact@v4
