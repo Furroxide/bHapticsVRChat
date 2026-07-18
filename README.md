@@ -5,14 +5,14 @@ Please read **[How to play VRChat with bHaptics](https://bhaptics.notion.site/Ho
 
 ### Files
 - [bHaptics Player](https://www.bhaptics.com/support/downloads)
-- [bHaptics VRChatOSC](https://github.com/bhaptics/VRChatOSC/releases/latest/download/bHapticsOSC.exe)
+- [bHaptics VRChatOSC](https://github.com/furroxide/bHapticsVRChat/releases/latest/download/bHapticsOSC.exe)
 
 ### Guides
 - [Setting Up](docs/setting-up.md)
 - [Upgrading](docs/upgrading.md)
 
 ### Quick Guide
-- **Run** both [bHaptics Player](https://www.bhaptics.com/support/downloads) and [bHaptics VRChatOSC](https://github.com/bhaptics/VRChatOSC/releases/latest/download/bHapticsOSC.exe).
+- **Run** both [bHaptics Player](https://www.bhaptics.com/support/downloads) and [bHaptics VRChatOSC](https://github.com/furroxide/bHapticsVRChat/releases/latest/download/bHapticsOSC.exe).
 - **Enter** [bHaptics Avatar World](https://vrchat.com/home/world/wrld_7b1fed5e-50da-4263-b68a-81344fab1ac7), or **Update** your avatar by referring to [How to Upload an Avatar with bHaptics Devices (PC)](https://bhaptics.notion.site/How-to-Upload-an-Avatar-with-bHaptics-Devices-PC-c0479c68b8984b9d9048423b8c44f503) / [How to Upload an Avatar with bHaptics Devices (Quest)](https://bhaptics.notion.site/How-to-Upload-an-Avatar-with-bHaptics-Devices-Quest-1356d5724b8b8090bae4e89cae7eb696).
   - This project uses [VRCFury](https://vrcfury.com/) for non-destructive avatar integration. Add the VRCFury VCC repository (`https://vcc.vrcfury.com/`) and resolve project packages before using the Unity integration.
   - In Unity, use **Create VRCFury Setup** from the bHapticsOSC Integration inspector. The setup is contained under the `bHapticsOSC VRCFury` object; deleting that object removes the setup and its generated assets.
@@ -33,7 +33,7 @@ bHaptics VRChatOSC is licensed under the GPL-3.0 License.
 
 ### Build Artifacts
 - Merges and direct pushes to `main` publish a GitHub Release automatically when `VERSION`, `CHANGELOG.md`, and package metadata agree on a new version.
-- The user-facing download link remains `https://github.com/bhaptics/VRChatOSC/releases/latest/download/bHapticsOSC.exe`.
+- The user-facing download link remains `https://github.com/furroxide/bHapticsVRChat/releases/latest/download/bHapticsOSC.exe`.
 - Pull requests targeting `main` build temporary artifacts for review automatically:
   - `bHapticsOSC.exe` as a single packaged Windows executable.
   - `bHapticsOSC-VRChat.unitypackage` from the Unity project.

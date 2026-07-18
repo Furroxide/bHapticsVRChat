@@ -5,7 +5,7 @@ This guide covers the normal user setup for running bHaptics in VRChat and addin
 ## Requirements
 
 - [bHaptics Player](https://www.bhaptics.com/support/downloads)
-- [bHaptics VRChatOSC](https://github.com/bhaptics/VRChatOSC/releases/latest/download/bHapticsOSC.exe)
+- [bHaptics VRChatOSC](https://github.com/furroxide/bHapticsVRChat/releases/latest/download/bHapticsOSC.exe)
 - Unity `2022.3.22f1` for avatar setup
 - VRChat SDK 3.0 / Avatars SDK, installed through VRChat Creator Companion
 - [VRCFury](https://vrcfury.com/), installed through VCC from `https://vcc.vrcfury.com/`

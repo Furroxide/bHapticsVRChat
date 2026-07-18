@@ -5,7 +5,7 @@ Use this guide when updating the Windows app, the Unity avatar package, or an av
 ## Update the Windows App
 
 1. Close any running copy of `bHapticsOSC.exe`.
-2. Download the latest `bHapticsOSC.exe` from the [latest GitHub Release](https://github.com/bhaptics/VRChatOSC/releases/latest/download/bHapticsOSC.exe).
+2. Download the latest `bHapticsOSC.exe` from the [latest GitHub Release](https://github.com/furroxide/bHapticsVRChat/releases/latest/download/bHapticsOSC.exe).
 3. Replace your old `bHapticsOSC.exe` with the new file.
 4. Start bHaptics Player.
 5. Run the new `bHapticsOSC.exe` and leave it open while using VRChat.
