@@ -172,8 +172,8 @@ function Get-ChangelogEntry([string]$ChangelogPath, [string]$Version) {
 }
 
 function Test-LocalTagExists([string]$Tag) {
-    $null = Get-GitOutput @('rev-parse', '--verify', '--quiet', "refs/tags/$Tag") -AllowFailure
-    return $LASTEXITCODE -eq 0
+    $matchingTag = Get-GitOutput @('tag', '--list', $Tag)
+    return $matchingTag -eq $Tag
 }
 
 function Test-RemoteReleaseExists([string]$Repository, [string]$Tag, [string]$Token) {
