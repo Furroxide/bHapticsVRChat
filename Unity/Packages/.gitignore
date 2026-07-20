@@ -3,6 +3,8 @@
 !vpm-manifest.json
 !manifest.json
 !packages-lock.json
+!com.furroxide.bhaptics-vrchat/
+!com.furroxide.bhaptics-vrchat/**
 !com.vrcfury.temp/
 com.vrcfury.temp/*
 !com.vrcfury.temp/package.json

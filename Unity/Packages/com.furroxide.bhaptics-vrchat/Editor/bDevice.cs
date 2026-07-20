@@ -1,7 +1,5 @@
 #if UNITY_EDITOR && VRC_SDK_VRCSDK3 && bHapticsOSC_HasVrcFury
 using System.Collections.Generic;
-using System.IO;
-using UnityEditor;
 using UnityEngine;
 
 namespace bHapticsOSC.VRChat
@@ -35,30 +33,10 @@ namespace bHapticsOSC.VRChat
             foreach (bDeviceTemplate settings in AllTemplates.Values)
             {
                 string nameWithoutSpaces = settings.Name.Replace(" ", "");
-
-                string withoutMeshStr = $"Assets/bHapticsOSC/VRChat/Prefabs/Without Mesh/{nameWithoutSpaces}.prefab";
-                if (File.Exists(withoutMeshStr))
-                {
-                    settings.Prefab = (GameObject)EditorGUIUtility.Load(withoutMeshStr);
-                }
-
-                string withMeshStr = $"Assets/bHapticsOSC/VRChat/Prefabs/With Mesh/{nameWithoutSpaces}.prefab";
-                if (File.Exists(withMeshStr))
-                {
-                    settings.PrefabMesh = (GameObject)EditorGUIUtility.Load(withMeshStr);
-                }
-
-                string withoutMeshMobileStr = $"Assets/bHapticsOSC/VRChat/Prefabs/Mobile Without Mesh/{nameWithoutSpaces}.prefab";
-                if (File.Exists(withoutMeshMobileStr))
-                {
-                    settings.PrefabMobile = (GameObject)EditorGUIUtility.Load(withoutMeshMobileStr);
-                }
-
-                string withMeshMobileStr = $"Assets/bHapticsOSC/VRChat/Prefabs/Mobile With Mesh/{nameWithoutSpaces}.prefab";
-                if (File.Exists(withMeshMobileStr))
-                {
-                    settings.PrefabMeshMobile = (GameObject)EditorGUIUtility.Load(withMeshMobileStr);
-                }
+                settings.Prefab = bPackageAssetResolver.LoadAsset<GameObject>($"Prefabs/Without Mesh/{nameWithoutSpaces}.prefab");
+                settings.PrefabMesh = bPackageAssetResolver.LoadAsset<GameObject>($"Prefabs/With Mesh/{nameWithoutSpaces}.prefab");
+                settings.PrefabMobile = bPackageAssetResolver.LoadAsset<GameObject>($"Prefabs/Mobile Without Mesh/{nameWithoutSpaces}.prefab");
+                settings.PrefabMeshMobile = bPackageAssetResolver.LoadAsset<GameObject>($"Prefabs/Mobile With Mesh/{nameWithoutSpaces}.prefab");
             }
         }
 

@@ -394,22 +394,51 @@ namespace bHapticsOSC.VRChat
 
         private static string PrepareGeneratedFolder(bHapticsOSCIntegration editorComp)
         {
-            EnsureFolder("Assets/bHapticsOSC/VRChat", "Generated");
+            editorComp.EnsureUniqueAssetKey();
+            EnsureFolderPath(bHapticsOSCIntegration.GeneratedAssetsRoot);
 
-            string folderName = SanitizeFileName($"{editorComp.gameObject.name}_{editorComp.assetKey}");
-            string folderPath = $"{bHapticsOSCIntegration.GeneratedAssetsRoot}/{folderName}";
+            string folderPath = GetGeneratedFolderPath(editorComp);
+            for (int attempt = 0;
+                 attempt < 8
+                 && AssetDatabase.IsValidFolder(folderPath)
+                 && bVrcFurySetup.GeneratedFolderIsClaimed(folderPath);
+                 attempt++)
+            {
+                editorComp.AssignFreshFallbackAssetKey();
+                folderPath = GetGeneratedFolderPath(editorComp);
+            }
+
             if (AssetDatabase.IsValidFolder(folderPath))
+            {
+                if (bVrcFurySetup.GeneratedFolderIsClaimed(folderPath))
+                    throw new IOException($"Unable to allocate an unclaimed generated asset folder: {folderPath}");
+
                 AssetDatabase.DeleteAsset(folderPath);
+            }
 
             AssetDatabase.CreateFolder(bHapticsOSCIntegration.GeneratedAssetsRoot, Path.GetFileName(folderPath));
             return folderPath;
         }
 
-        private static void EnsureFolder(string parent, string folderName)
+        private static string GetGeneratedFolderPath(bHapticsOSCIntegration editorComp)
         {
-            string path = $"{parent}/{folderName}";
-            if (!AssetDatabase.IsValidFolder(path))
-                AssetDatabase.CreateFolder(parent, folderName);
+            string folderName = SanitizeFileName($"{editorComp.gameObject.name}_{editorComp.assetKey}");
+            return $"{bHapticsOSCIntegration.GeneratedAssetsRoot}/{folderName}";
+        }
+
+        private static void EnsureFolderPath(string folderPath)
+        {
+            folderPath = folderPath.Replace('\\', '/').TrimEnd('/');
+            if (AssetDatabase.IsValidFolder(folderPath))
+                return;
+
+            string parentPath = Path.GetDirectoryName(folderPath)?.Replace('\\', '/');
+            if (string.IsNullOrWhiteSpace(parentPath) || !parentPath.StartsWith("Assets", System.StringComparison.Ordinal))
+                throw new IOException($"Generated asset folder must be inside Assets: {folderPath}");
+
+            EnsureFolderPath(parentPath);
+            if (string.IsNullOrEmpty(AssetDatabase.CreateFolder(parentPath, Path.GetFileName(folderPath))))
+                throw new IOException($"Unable to create generated asset folder: {folderPath}");
         }
 
         private static string SanitizeFileName(string value)

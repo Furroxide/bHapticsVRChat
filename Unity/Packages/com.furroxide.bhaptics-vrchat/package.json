@@ -1,0 +1,40 @@
+{
+  "name": "com.furroxide.bhaptics-vrchat",
+  "displayName": "bHaptics VRChatOSC",
+  "version": "2.3.1",
+  "description": "bHaptics OSC haptic device integration for VRChat avatars.",
+  "unity": "2022.3",
+  "author": {
+    "name": "Furroxide",
+    "email": "221987073+furroxide@users.noreply.github.com",
+    "url": "https://github.com/furroxide"
+  },
+  "license": "GPL-3.0-only",
+  "documentationUrl": "https://github.com/furroxide/bHapticsVRChat#readme",
+  "changelogUrl": "https://github.com/furroxide/bHapticsVRChat/blob/main/CHANGELOG.md",
+  "keywords": [
+    "bhaptics",
+    "haptics",
+    "osc",
+    "vrchat",
+    "vrcfury"
+  ],
+  "vpmDependencies": {
+    "com.vrchat.avatars": "3.10.x",
+    "com.vrcfury.vrcfury": ">=1.1341.0 <2.0.0"
+  },
+  "legacyFolders": {
+    "Assets\\bHapticsOSC\\VRChat\\Materials": "13f92bc2b3af777418356c43e176eb0d",
+    "Assets\\bHapticsOSC\\VRChat\\Models": "0ea71aee00703a54098c3828d5467e1d",
+    "Assets\\bHapticsOSC\\VRChat\\Prefabs": "d4be18ff8ac3b7440b79abe75706e198",
+    "Assets\\bHapticsOSC\\VRChat\\Scripts": "e5ed1b6b981cfd24daba2d9156e2093c",
+    "Assets\\bHapticsOSC\\VRChat\\Shaders": "04ab7b92a321da2428e8bf372e46fe6b",
+    "Assets\\bHapticsOSC\\VRChat\\Textures": "34984ce1bee61fe4b85179972649bfaa"
+  },
+  "legacyFiles": {
+    "Assets\\bHapticsOSC\\VRChat\\ParameterExclusions.txt": ""
+  },
+  "legacyPackages": [
+    "bHapticsOSC.VRChat"
+  ]
+}

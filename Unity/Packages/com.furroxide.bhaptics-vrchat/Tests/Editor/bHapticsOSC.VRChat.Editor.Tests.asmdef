@@ -1,0 +1,31 @@
+{
+  "name": "bHapticsOSC.VRChat.Editor.Tests",
+  "rootNamespace": "bHapticsOSC.VRChat.Tests",
+  "references": [
+    "bHapticsOSC.VRChat",
+    "bHapticsOSC.VRChat.Editor",
+    "VRC.SDKBase",
+    "VRC.SDK3A",
+    "VRC.SDKBase.Editor.BuildPipeline"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [
+    {
+      "name": "com.vrcfury.vrcfury",
+      "expression": "[1.1341.0,2.0.0)",
+      "define": "bHapticsOSC_HasVrcFury"
+    }
+  ],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

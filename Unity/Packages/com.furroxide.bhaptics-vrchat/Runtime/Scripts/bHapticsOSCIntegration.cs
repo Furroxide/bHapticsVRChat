@@ -59,17 +59,80 @@ namespace bHapticsOSC.VRChat
                 return;
             }
 
-            if (string.IsNullOrEmpty(assetKey) || string.IsNullOrEmpty(assetKey.Trim()))
-                assetKey = CreateStableAssetKey();
+            EnsureUniqueAssetKey();
+        }
+
+        public void EnsureUniqueAssetKey()
+        {
+            if (!NeedsNewAssetKey(assetKey))
+                return;
+
+            SetAssetKey(CreateStableAssetKey());
+        }
+
+        public void AssignFreshFallbackAssetKey()
+        {
+            SetAssetKey(System.Guid.NewGuid().ToString("N"));
+        }
+
+        private void SetAssetKey(string value)
+        {
+            Undo.RecordObject(this, $"[{SystemName}] Repair Generated Asset Ownership");
+            assetKey = value;
+            EditorUtility.SetDirty(this);
+            if (PrefabUtility.IsPartOfPrefabInstance(this))
+                PrefabUtility.RecordPrefabInstancePropertyModifications(this);
         }
 
         private string CreateStableAssetKey()
         {
-            string globalId = GlobalObjectId.GetGlobalObjectIdSlow(gameObject).ToString();
-            if (!string.IsNullOrWhiteSpace(globalId) && !globalId.Contains("Null"))
-                return globalId;
+            GlobalObjectId globalId = GlobalObjectId.GetGlobalObjectIdSlow(gameObject);
+            if (HasStableGlobalObjectId(globalId))
+                return globalId.ToString();
 
-            return $"{gameObject.scene.name}_{gameObject.name}";
+            return System.Guid.NewGuid().ToString("N");
+        }
+
+        private bool NeedsNewAssetKey(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return true;
+
+            GlobalObjectId currentGlobalId = GlobalObjectId.GetGlobalObjectIdSlow(gameObject);
+            if (HasStableGlobalObjectId(currentGlobalId))
+            {
+                return !GlobalObjectId.TryParse(value, out GlobalObjectId storedGlobalId)
+                       || !HasStableGlobalObjectId(storedGlobalId)
+                       || !storedGlobalId.ToString().Equals(
+                           currentGlobalId.ToString(),
+                           System.StringComparison.Ordinal);
+            }
+
+            if (GlobalObjectId.TryParse(value, out _)
+                || value.StartsWith("GlobalObjectId_V1-", System.StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            foreach (bHapticsOSCIntegration integration in
+                     Resources.FindObjectsOfTypeAll<bHapticsOSCIntegration>())
+            {
+                if (integration != null
+                    && integration != this
+                    && value.Equals(integration.assetKey, System.StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool HasStableGlobalObjectId(GlobalObjectId globalId)
+        {
+            return globalId.identifierType != 0
+                   && !globalId.assetGUID.Empty()
+                   && globalId.targetObjectId != 0;
         }
 
         public Transform GetOrCreateVrcFuryRoot(bool registerUndo = false)

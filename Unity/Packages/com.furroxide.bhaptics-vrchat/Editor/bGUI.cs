@@ -36,54 +36,54 @@ namespace bHapticsOSC.VRChat
 
             LabelStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter };
 
-            Rig = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/rig.png", typeof(Sprite));
+            Rig = LoadSprite("rig.png");
             RigStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.UpperCenter };
 
             Elements[bDeviceType.HEAD] = new bGUITemplateElements
             {
-                NotSelected = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactal.png", typeof(Sprite)),
-                Selected = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactal_selected.png", typeof(Sprite)),
-                Prefab = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactal_prefab.png", typeof(Sprite)),
+                NotSelected = LoadSprite("tactal.png"),
+                Selected = LoadSprite("tactal_selected.png"),
+                Prefab = LoadSprite("tactal_prefab.png"),
                 Style = new GUIStyle(RigStyle) { contentOffset = new Vector2(2, 0) }
             };
 
             Elements[bDeviceType.VEST] = new bGUITemplateElements
             {
-                NotSelected = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactsuit.png", typeof(Sprite)),
-                Selected = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactsuit_selected.png", typeof(Sprite)),
-                Prefab = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactsuit_prefab.png", typeof(Sprite)),
+                NotSelected = LoadSprite("tactsuit.png"),
+                Selected = LoadSprite("tactsuit_selected.png"),
+                Prefab = LoadSprite("tactsuit_prefab.png"),
                 Style = new GUIStyle(RigStyle) { contentOffset = new Vector2(2, 0) }
             };
 
             Elements[bDeviceType.ARM_LEFT] = new bGUITemplateElements
             {
-                NotSelected = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactosyA_left.png", typeof(Sprite)),
-                Selected = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactosyA_left_selected.png", typeof(Sprite)),
-                Prefab = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactosyA_left_prefab.png", typeof(Sprite)),
+                NotSelected = LoadSprite("tactosyA_left.png"),
+                Selected = LoadSprite("tactosyA_left_selected.png"),
+                Prefab = LoadSprite("tactosyA_left_prefab.png"),
                 Style = new GUIStyle(RigStyle) { contentOffset = new Vector2(62, 0) }
             };
 
             Elements[bDeviceType.ARM_RIGHT] = new bGUITemplateElements
             {
-                NotSelected = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactosyA_right.png", typeof(Sprite)),
-                Selected = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactosyA_right_selected.png", typeof(Sprite)),
-                Prefab = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactosyA_right_prefab.png", typeof(Sprite)),
+                NotSelected = LoadSprite("tactosyA_right.png"),
+                Selected = LoadSprite("tactosyA_right_selected.png"),
+                Prefab = LoadSprite("tactosyA_right_prefab.png"),
                 Style = new GUIStyle(RigStyle) { contentOffset = new Vector2(-58, 0) }
             };
 
             Elements[bDeviceType.HAND_LEFT] = new bGUITemplateElements
             {
-                NotSelected = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactosyH_left.png", typeof(Sprite)),
-                Selected = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactosyH_left_selected.png", typeof(Sprite)),
-                Prefab = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactosyH_left_prefab.png", typeof(Sprite)),
+                NotSelected = LoadSprite("tactosyH_left.png"),
+                Selected = LoadSprite("tactosyH_left_selected.png"),
+                Prefab = LoadSprite("tactosyH_left_prefab.png"),
                 Style = new GUIStyle(RigStyle) { contentOffset = new Vector2(78, 0) }
             };
 
             Elements[bDeviceType.HAND_RIGHT] = new bGUITemplateElements
             {
-                NotSelected = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactosyH_right.png", typeof(Sprite)),
-                Selected = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactosyH_right_selected.png", typeof(Sprite)),
-                Prefab = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactosyH_right_prefab.png", typeof(Sprite)),
+                NotSelected = LoadSprite("tactosyH_right.png"),
+                Selected = LoadSprite("tactosyH_right_selected.png"),
+                Prefab = LoadSprite("tactosyH_right_prefab.png"),
                 Style = new GUIStyle(RigStyle) { contentOffset = new Vector2(-73, 0) }
             };
 
@@ -91,20 +91,23 @@ namespace bHapticsOSC.VRChat
 
             Elements[bDeviceType.FOOT_LEFT] = new bGUITemplateElements
             {
-                NotSelected = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactosyF_left.png", typeof(Sprite)),
-                Selected = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactosyF_left_selected.png", typeof(Sprite)),
-                Prefab = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactosyF_left_prefab.png", typeof(Sprite)),
+                NotSelected = LoadSprite("tactosyF_left.png"),
+                Selected = LoadSprite("tactosyF_left_selected.png"),
+                Prefab = LoadSprite("tactosyF_left_prefab.png"),
                 Style = new GUIStyle(RigStyle) { contentOffset = new Vector2(54, 0) }
             };
 
             Elements[bDeviceType.FOOT_RIGHT] = new bGUITemplateElements
             {
-                NotSelected = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactosyF_right.png", typeof(Sprite)),
-                Selected = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactosyF_right_selected.png", typeof(Sprite)),
-                Prefab = (Sprite)AssetDatabase.LoadAssetAtPath("Assets/bHapticsOSC/VRChat/Textures/UI/tactosyF_right_prefab.png", typeof(Sprite)),
+                NotSelected = LoadSprite("tactosyF_right.png"),
+                Selected = LoadSprite("tactosyF_right_selected.png"),
+                Prefab = LoadSprite("tactosyF_right_prefab.png"),
                 Style = new GUIStyle(RigStyle) { contentOffset = new Vector2(-50, 0) }
             };
         }
+
+        private static Sprite LoadSprite(string fileName)
+            => bPackageAssetResolver.LoadAsset<Sprite>($"Textures/UI/{fileName}");
 
         public static void DrawSeparator()
         {

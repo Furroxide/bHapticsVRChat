@@ -21,6 +21,7 @@ namespace bHapticsOSC.VRChat
 			EditorGUILayout.Space();
 
 			editorComp = (bHapticsOSCIntegration)target;
+			bCompanionStatusGUI.DrawInspectorCard();
 			editorComp.Validate();
 			if (editorComp.avatar == null)
 				return;
@@ -270,7 +271,8 @@ namespace bHapticsOSC.VRChat
 					bVrcFury.Apply(editorComp, generatedAssets);
 
 					EditorUtility.ClearProgressBar();
-					EditorUtility.DisplayDialog(bHapticsOSCIntegration.SystemName, "VRCFury Setup Complete!\nDelete the bHapticsOSC VRCFury object to remove this setup and its generated assets.", "OK");
+					Debug.Log("VRCFury setup complete. To remove its generated assets, delete the bHapticsOSC VRCFury object, save, and close the scene or prefab.");
+					bCompanionSetupWindow.ShowAvatarSetupComplete();
 					DestroyImmediate(editorComp);
 				}
 				catch (System.Exception e)
