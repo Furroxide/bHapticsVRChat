@@ -1,0 +1,18 @@
+{
+  "name": "Furroxide bHaptics VRChat Packages",
+  "id": "com.furroxide.bhaptics-vrchat.listing",
+  "url": "https://furroxide.github.io/bHapticsVRChat/index.json",
+  "author": {
+    "name": "Furroxide",
+    "email": "221987073+furroxide@users.noreply.github.com",
+    "url": "https://github.com/furroxide"
+  },
+  "description": "VRChat Creator Companion packages for the Furroxide-maintained bHaptics VRChatOSC fork.",
+  "infoLink": {
+    "text": "Project documentation and releases",
+    "url": "https://github.com/furroxide/bHapticsVRChat"
+  },
+  "githubRepos": [
+    "furroxide/bHapticsVRChat"
+  ]
+}
