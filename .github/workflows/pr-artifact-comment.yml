@@ -60,14 +60,16 @@ jobs:
             });
 
             const wantedArtifacts = [
-              { name: 'bHapticsOSC.exe', label: 'bHapticsOSC.exe' },
-              { name: 'bHapticsOSC-VRChat.unitypackage', label: 'bHapticsOSC-VRChat.unitypackage' },
+              { label: 'bHapticsOSC.exe', find: item => item.name === 'bHapticsOSC.exe' },
+              { label: 'bHapticsOSC-VRChat.unitypackage', find: item => item.name === 'bHapticsOSC-VRChat.unitypackage' },
+              { label: 'VPM package ZIP', find: item => /^com\.furroxide\.bhaptics-vrchat-\d+\.\d+\.\d+\.zip$/.test(item.name) },
+              { label: 'VPM package.json', find: item => item.name === 'package.json' },
             ];
 
-            const artifactRows = wantedArtifacts.map(({ name, label }) => {
-              const artifact = artifacts.find(item => item.name === name && !item.expired);
+            const artifactRows = wantedArtifacts.map(({ label, find }) => {
+              const artifact = artifacts.find(item => find(item) && !item.expired);
               if (!artifact) {
-                core.warning(`Expected artifact was not found: ${name}`);
+                core.warning(`Expected artifact was not found: ${label}`);
                 return `| ${label} | Not found in this run |`;
               }
 

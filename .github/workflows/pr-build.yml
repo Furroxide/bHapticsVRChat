@@ -36,7 +36,7 @@ jobs:
       - name: Reject committed binary artifacts
         shell: bash
         run: |
-          tracked="$(git ls-files '*.exe' '*.unitypackage' '*.dll' '*.pdb')"
+          tracked="$(git ls-files '*.exe' '*.unitypackage' '*.dll' '*.pdb' 'com.furroxide.bhaptics-vrchat-*.zip')"
           if [ -n "$tracked" ]; then
             echo "Binary build artifacts must not be tracked:"
             echo "$tracked"
@@ -65,13 +65,29 @@ jobs:
         run: |
           dotnet msbuild External\bHapticsOSC\bHapticsOSC.sln /m /restore /p:Configuration=Release /p:Platform="Any CPU"
 
-      - name: Stage Windows artifact
+      - name: Validate and stage Windows artifact
         shell: pwsh
         run: |
           $outputPath = "External\bHapticsOSC\Output\Release"
           $exePath = Join-Path $outputPath "bHapticsOSC.exe"
           if (-not (Test-Path -LiteralPath $exePath)) {
               throw "Expected executable was not produced: $exePath"
+          }
+
+          $expectedVersion = (Get-Content -LiteralPath VERSION -Raw).Trim()
+          $versionInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path -LiteralPath $exePath).Path)
+          if ($versionInfo.ProductName -cne 'bHapticsOSC') {
+              throw "Executable ProductName must be 'bHapticsOSC', got '$($versionInfo.ProductName)'."
+          }
+
+          try {
+              $actualFileVersion = [Version]$versionInfo.FileVersion
+          } catch {
+              throw "Executable FileVersion is not a valid version: '$($versionInfo.FileVersion)'."
+          }
+          $actualCoreVersion = "$($actualFileVersion.Major).$($actualFileVersion.Minor).$($actualFileVersion.Build)"
+          if ($actualCoreVersion -cne $expectedVersion -or $actualFileVersion.Revision -gt 0) {
+              throw "Executable FileVersion ($actualFileVersion) must match VERSION ($expectedVersion), with no nonzero fourth component."
           }
 
           $dlls = @(Get-ChildItem -LiteralPath $outputPath -Filter '*.dll' -File)
@@ -97,6 +113,7 @@ jobs:
     needs:
       - build-exe
       - build-unity-package
+      - build-vpm-package
     timeout-minutes: 10
     if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
     permissions:
@@ -122,14 +139,16 @@ jobs:
             });
 
             const wantedArtifacts = [
-              { name: 'bHapticsOSC.exe', label: 'bHapticsOSC.exe' },
-              { name: 'bHapticsOSC-VRChat.unitypackage', label: 'bHapticsOSC-VRChat.unitypackage' },
+              { label: 'bHapticsOSC.exe', find: item => item.name === 'bHapticsOSC.exe' },
+              { label: 'bHapticsOSC-VRChat.unitypackage', find: item => item.name === 'bHapticsOSC-VRChat.unitypackage' },
+              { label: 'VPM package ZIP', find: item => /^com\.furroxide\.bhaptics-vrchat-\d+\.\d+\.\d+\.zip$/.test(item.name) },
+              { label: 'VPM package.json', find: item => item.name === 'package.json' },
             ];
 
-            const artifactRows = wantedArtifacts.map(({ name, label }) => {
-              const artifact = artifacts.find(item => item.name === name && !item.expired);
+            const artifactRows = wantedArtifacts.map(({ label, find }) => {
+              const artifact = artifacts.find(item => find(item) && !item.expired);
               if (!artifact) {
-                core.warning(`Expected artifact was not found: ${name}`);
+                core.warning(`Expected artifact was not found: ${label}`);
                 return `| ${label} | Not found in this run |`;
               }
 
@@ -205,14 +224,19 @@ jobs:
             Unity/Packages/com.vrchat.avatars/Samples \
             Unity/Packages/com.vrchat.avatars/Samples.meta
 
+      - name: Stage legacy Unity package project
+        shell: pwsh
+        run: |
+          ./Tools/Export-UnityPackage.ps1 -ProjectPath Unity -StagingPath UnityLegacyExport -StageOnly
+
       - name: Export Unity package
-        uses: game-ci/unity-builder@v4
+        uses: game-ci/unity-builder@1d4ee0697f193f54668e98961d79907911f4b4f2 # v4
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
-          projectPath: Unity
+          projectPath: UnityLegacyExport
           unityVersion: 2022.3.22f1
           targetPlatform: StandaloneWindows64
           buildMethod: bHapticsOSC.VRChat.bPackageExporter.ExportFromCommandLine
@@ -226,5 +250,37 @@ jobs:
         with:
           name: bHapticsOSC-VRChat.unitypackage
           path: dist/bHapticsOSC-VRChat.unitypackage
+          if-no-files-found: error
+          retention-days: 14
+
+  build-vpm-package:
+    name: Build VPM package
+    runs-on: ubuntu-latest
+    needs: audit-tracked-artifacts
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build deterministic VPM archive
+        id: build_vpm
+        shell: pwsh
+        run: |
+          ./Tools/Build-VpmPackage.ps1
+
+      - name: Upload VPM archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build_vpm.outputs.archive_name }}
+          path: ${{ steps.build_vpm.outputs.archive_path }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload VPM manifest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package.json
+          path: ${{ steps.build_vpm.outputs.manifest_path }}
           if-no-files-found: error
           retention-days: 14

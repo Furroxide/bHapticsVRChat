@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   validate-release-metadata:
-    name: Validate version and changelog
+    name: Validate version, changelog, and VPM manifest
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
