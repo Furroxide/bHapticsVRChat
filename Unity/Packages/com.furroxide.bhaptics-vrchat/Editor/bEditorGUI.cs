@@ -242,6 +242,8 @@ namespace bHapticsOSC.VRChat
 				return;
 			}
 
+			DrawContactCompressionToggle(editorComp);
+
 			if (bGUI.DrawButton("CREATE VRCFURY SETUP"))
 			{
 				try
@@ -256,6 +258,9 @@ namespace bHapticsOSC.VRChat
 
 					EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Preparing punch receivers...", 0.35f);
 					bPunch.ApplyReceivers(editorComp);
+
+					EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Applying contact compression...", 0.40f);
+					ApplyContactCompression(editorComp);
 
 					if (bConstraints.ShouldApply(editorComp, bDeviceType.HAND_LEFT, out bUserSettings leftHandSettings)
 						|| bConstraints.ShouldApply(editorComp, bDeviceType.HAND_RIGHT, out bUserSettings rightHandSettings))
@@ -287,6 +292,46 @@ namespace bHapticsOSC.VRChat
 
 			if (GUI.changed)
 				EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+		}
+
+
+		/// <summary>
+		/// Offers contact compression, with the numbers that make the trade-off concrete rather than
+		/// abstract.
+		/// </summary>
+		private static void DrawContactCompressionToggle(bHapticsOSCIntegration editorComp)
+		{
+#if bHapticsOSC_HasContactCompressor
+			GUILayout.Space(6);
+
+			bool wanted = bGUI.DrawToggle("Consolidate contact receivers", editorComp.ConsolidateContacts, editorComp);
+			if (wanted != editorComp.ConsolidateContacts)
+				editorComp.ConsolidateContacts = wanted;
+
+			bCompressor.EstimateSavings(editorComp, out int before, out int after);
+			if (before > 0)
+			{
+				EditorGUILayout.HelpBox(
+					editorComp.ConsolidateContacts
+						? $"Vest, head and arm receivers become {after} instead of {before} at build time. "
+						  + "The companion app decodes the touch position, so contact spreads smoothly across "
+						  + "neighbouring motors. Export the manifest from a Contact Compressor Group into the "
+						  + "app's Config folder."
+						: $"Currently {before} contact receivers across the vest, head and arms. "
+						  + $"Consolidating would make it {after}.",
+					editorComp.ConsolidateContacts ? MessageType.Info : MessageType.None);
+			}
+#endif
+		}
+
+		private static void ApplyContactCompression(bHapticsOSCIntegration editorComp)
+		{
+#if bHapticsOSC_HasContactCompressor
+			if (editorComp.ConsolidateContacts)
+				bCompressor.ApplyGroups(editorComp);
+			else
+				bCompressor.RemoveGroups(editorComp);
+#endif
 		}
 
 	}

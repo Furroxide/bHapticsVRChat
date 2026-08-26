@@ -25,6 +25,10 @@ namespace bHapticsOSC.VRChat
 
         [SerializeField]
         public bDeviceType CurrentDevice = bDeviceType.VEST;
+
+        [Tooltip("Replace the per-motor contact receivers with a positional encoder at build time. "
+                 + "Far fewer contacts, and the touch position is continuous rather than one motor at a time.")]
+        public bool ConsolidateContacts = false;
         [SerializeField]
         public Dictionary<bDeviceTemplate, bUserSettings> AllUserSettings;
         [SerializeField]

@@ -21,7 +21,8 @@
   ],
   "vpmDependencies": {
     "com.vrchat.avatars": "3.10.x",
-    "com.vrcfury.vrcfury": ">=1.1341.0 <2.0.0"
+    "com.vrcfury.vrcfury": ">=1.1341.0 <2.0.0",
+    "com.furroxide.contact-compressor": ">=0.1.0 <1.0.0"
   },
   "legacyFolders": {
     "Assets\\bHapticsOSC\\VRChat\\Materials": "13f92bc2b3af777418356c43e176eb0d",
