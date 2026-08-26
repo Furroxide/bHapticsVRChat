@@ -169,7 +169,8 @@ namespace Furroxide.ContactCompressor
             return result;
         }
 
-        internal static EncoderAxes AxisFlag(int axis)
+        /// <summary>The flag for one axis index. Public because the editor assembly needs it too.</summary>
+        public static EncoderAxes AxisFlag(int axis)
             => axis == 0 ? EncoderAxes.X : axis == 1 ? EncoderAxes.Y : EncoderAxes.Z;
 
         /// <summary>Number of receivers a group with these axes will emit.</summary>

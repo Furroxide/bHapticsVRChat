@@ -6,6 +6,12 @@
       "source": "embedded",
       "dependencies": {}
     },
+    "com.furroxide.contact-compressor": {
+      "version": "file:com.furroxide.contact-compressor",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {}
+    },
     "com.unity.ai.navigation": {
       "version": "1.1.7",
       "depth": 0,

@@ -1,0 +1,33 @@
+{
+  "name": "Furroxide.ContactCompressor.Editor.Tests",
+  "rootNamespace": "Furroxide.ContactCompressor.Tests",
+  "references": [
+    "Furroxide.ContactCompressor",
+    "Furroxide.ContactCompressor.Core",
+    "Furroxide.ContactCompressor.Editor",
+    "VRC.SDKBase",
+    "VRC.SDK3A",
+    "VRC.SDKBase.Editor.BuildPipeline",
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll",
+    "VRC.Dynamics.dll",
+    "VRC.SDK3.Dynamics.Contact.dll",
+    "VRCSDK3A.dll",
+    "VRCSDKBase.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
