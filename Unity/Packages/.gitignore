@@ -5,6 +5,8 @@
 !packages-lock.json
 !com.furroxide.bhaptics-vrchat/
 !com.furroxide.bhaptics-vrchat/**
+!com.furroxide.contact-compressor/
+!com.furroxide.contact-compressor/**
 !com.vrcfury.temp/
 com.vrcfury.temp/*
 !com.vrcfury.temp/package.json

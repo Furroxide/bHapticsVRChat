@@ -1,0 +1,18 @@
+{
+  "name": "Furroxide.ContactCompressor",
+  "rootNamespace": "Furroxide.ContactCompressor",
+  "references": [
+    "Furroxide.ContactCompressor.Core",
+    "VRC.SDKBase",
+    "VRC.SDK3A"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
