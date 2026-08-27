@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
+      should_release: ${{ steps.gate.outputs.should_release }}
       version: ${{ steps.validate.outputs.version }}
       tag: ${{ steps.validate.outputs.tag }}
       vpm_archive: ${{ steps.validate.outputs.vpm_archive }}
@@ -31,8 +32,45 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      # Not every push to main is a release. Docs, CI and tooling commits land here too, and the
+      # validator rightly fails them - it refuses to re-publish a version that is already out.
+      # Failing is the correct answer on a pull request, where an unbumped version means someone is
+      # about to merge a release that cannot publish. On main, after that merge has happened, it
+      # just means the release already went out, so this skips the run rather than reporting a
+      # failure the maintainer can do nothing about.
+      # bash, not pwsh: the 404 here is an expected, load-bearing outcome, and Actions runs pwsh
+      # with $ErrorActionPreference='stop', which on PowerShell 7.4 turns a non-zero native exit
+      # into a terminating error. That would fail this step on exactly the path that means "this
+      # is a new release" - the first push of every version. `if ! cmd` is likewise exempt from
+      # bash's own -e.
+      - name: Decide whether this push is a release
+        id: gate
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          tag="v$version"
+
+          if ! draft="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .draft 2>/dev/null)"; then
+            echo "No release exists for $tag yet; this push is a release."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # A leftover draft is recoverable - the publisher adopts it - so let the run proceed.
+          if [ "$draft" = "true" ]; then
+            echo "$tag exists only as a draft; this push resumes it."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "$tag is already published. Nothing to release from this push."
+          echo "should_release=false" >> "$GITHUB_OUTPUT"
+
       - name: Validate release metadata
         id: validate
+        if: steps.gate.outputs.should_release == 'true'
         shell: pwsh
         env:
           BASE_REF: ${{ github.event.before }}
@@ -41,6 +79,7 @@ jobs:
           ./Tools/Validate-ReleaseMetadata.ps1 -BaseRef "$env:BASE_REF" -ChangelogEntryPath release-notes.md -AllowCurrentCommitTag
 
       - name: Upload release notes
+        if: steps.gate.outputs.should_release == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: release-notes
@@ -52,6 +91,7 @@ jobs:
     name: Build bHapticsOSC.exe
     runs-on: windows-latest
     needs: validate
+    if: needs.validate.outputs.should_release == 'true'
     timeout-minutes: 30
 
     steps:
@@ -116,6 +156,7 @@ jobs:
     name: Build Unity package
     runs-on: ubuntu-latest
     needs: validate
+    if: needs.validate.outputs.should_release == 'true'
     timeout-minutes: 60
     environment: unity-pr-artifacts
 
@@ -172,6 +213,7 @@ jobs:
     name: Build VPM package
     runs-on: ubuntu-latest
     needs: validate
+    if: needs.validate.outputs.should_release == 'true'
     timeout-minutes: 10
 
     steps:
