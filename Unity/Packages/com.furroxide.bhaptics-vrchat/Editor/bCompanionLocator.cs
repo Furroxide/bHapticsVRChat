@@ -239,6 +239,9 @@ namespace bHapticsOSC.VRChat
             if (!string.IsNullOrWhiteSpace(remembered))
                 yield return new SearchRoot(SafeGetDirectoryName(remembered), 1);
 
+            // Where the one-click install puts it, so a previous install is found without a search.
+            yield return new SearchRoot(bCompanionInstaller.InstallDirectory, 0);
+
             // Deep: a release archive unpacks into a folder of its own here.
             foreach (string folder in DownloadAndDesktopFolders())
                 yield return new SearchRoot(folder, DeepSearchDepth);

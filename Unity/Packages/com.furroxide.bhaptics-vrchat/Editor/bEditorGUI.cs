@@ -26,36 +26,7 @@ namespace bHapticsOSC.VRChat
 			if (!DrawSetupProblem(editorComp))
 				return;
 
-			if (editorComp.AllUserSettings == null)
-            {
-				editorComp.AllUserSettings = new Dictionary<bDeviceTemplate, bUserSettings>();
-				for (int i = 0; i < bDevice.AllTemplates.Values.Count; i++)
-				{
-					bDeviceTemplate template = bDevice.AllTemplates.Values.ElementAt(i);
-					if (!template.HasBone)
-						continue;
-
-					bUserSettings newSettings = CreateInstance<bUserSettings>();
-					newSettings.Bone = template.Bone;
-
-					var getNewPrefab = new Func<bUserSettings, GameObject>(x =>
-					{
-						if (x.ShowMesh)
-						{
-							return x.IsMobile ? template.PrefabMeshMobile : template.PrefabMesh;
-						}
-						else
-						{
-							return x.IsMobile ? template.PrefabMobile : template.Prefab;
-						}
-					});
-					
-					
-					newSettings.OnShowMeshChange = thisSettings => thisSettings.SwapPrefabs(editorComp, getNewPrefab(thisSettings));
-					newSettings.OnIsMobileChange = thisSettings => thisSettings.SwapPrefabs(editorComp, getNewPrefab(thisSettings));
-					editorComp.AllUserSettings[template] = newSettings;
-				}
-			}
+			EnsureUserSettings(editorComp);
 
 			if (editorComp.AllCustomContactTagsContainers == null)
 			{
@@ -266,42 +237,8 @@ namespace bHapticsOSC.VRChat
 
 				try
 				{
-					EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Preparing bHaptics objects...", 0.1f);
-					editorComp.GetOrCreateVrcFuryRoot(true);
-					foreach (bUserSettings settings in editorComp.AllUserSettings.Values)
-						settings.MoveToStagingRoot(editorComp, true);
-
-					EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Applying contact tags...", 0.25f);
-					bContacts.ApplyNewTags(editorComp);
-
-					EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Preparing punch receivers...", 0.35f);
-					bPunch.ApplyReceivers(editorComp);
-
-					EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Applying contact compression...", 0.40f);
-					ApplyContactCompression(editorComp);
-
-					if (bConstraints.ShouldApply(editorComp, bDeviceType.HAND_LEFT, out bUserSettings leftHandSettings)
-						|| bConstraints.ShouldApply(editorComp, bDeviceType.HAND_RIGHT, out bUserSettings rightHandSettings))
-					{
-						EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Applying ParentConstraints...", 0.45f);
-						bConstraints.Apply(editorComp);
-					}
-
-					EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Generating VRCFury assets...", 0.65f);
-					bGeneratedAnimatorAssets generatedAssets = bAnimator.CreateGeneratedAssets(editorComp);
-
-					EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Creating VRCFury components...", 0.85f);
-					bVrcFury.Apply(editorComp, generatedAssets);
-
-					EditorUtility.ClearProgressBar();
-					Debug.Log("VRCFury setup complete. To remove its generated assets, delete the bHapticsOSC VRCFury object, save, and close the scene or prefab.");
-
-					// Destroyed through Undo so the whole setup collapses into one entry: a single
-					// Ctrl+Z brings the user back to the device picker with their choices intact.
-					Undo.DestroyObjectImmediate(editorComp);
+					RunSetupPipeline(editorComp);
 					Undo.CollapseUndoOperations(undoGroup);
-
-					bCompanionSetupWindow.ShowAvatarSetupComplete();
 				}
 				catch (System.Exception e)
 				{
@@ -328,6 +265,87 @@ namespace bHapticsOSC.VRChat
 				EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
 		}
 
+
+		/// <summary>
+		/// Everything the avatar side does, in the order it has to happen.
+		///
+		/// Shared with the one-click "Set up this avatar" action so both routes run identical code
+		/// - a second copy of this sequence would drift, and the order is not obvious enough to
+		/// rediscover. The caller owns the undo group and the failure handling; this either
+		/// completes or throws.
+		/// </summary>
+		internal static void RunSetupPipeline(bHapticsOSCIntegration editorComp)
+		{
+			try
+			{
+				EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Preparing bHaptics objects...", 0.1f);
+				editorComp.GetOrCreateVrcFuryRoot(true);
+				foreach (bUserSettings settings in editorComp.AllUserSettings.Values)
+					settings.MoveToStagingRoot(editorComp, true);
+
+				EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Applying contact tags...", 0.25f);
+				bContacts.ApplyNewTags(editorComp);
+
+				EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Preparing punch receivers...", 0.35f);
+				bPunch.ApplyReceivers(editorComp);
+
+				EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Applying contact compression...", 0.40f);
+				ApplyContactCompression(editorComp);
+
+				if (bConstraints.ShouldApply(editorComp, bDeviceType.HAND_LEFT, out bUserSettings leftHandSettings)
+					|| bConstraints.ShouldApply(editorComp, bDeviceType.HAND_RIGHT, out bUserSettings rightHandSettings))
+				{
+					EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Applying ParentConstraints...", 0.45f);
+					bConstraints.Apply(editorComp);
+				}
+
+				EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Generating VRCFury assets...", 0.65f);
+				bGeneratedAnimatorAssets generatedAssets = bAnimator.CreateGeneratedAssets(editorComp);
+
+				EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Creating VRCFury components...", 0.85f);
+				bVrcFury.Apply(editorComp, generatedAssets);
+			}
+			finally
+			{
+				EditorUtility.ClearProgressBar();
+			}
+
+			Debug.Log("VRCFury setup complete. To remove its generated assets, delete the bHapticsOSC VRCFury object, save, and close the scene or prefab.");
+
+			// Destroyed through Undo so the whole setup collapses into one entry: a single
+			// Ctrl+Z brings the user back to the device picker with their choices intact.
+			Undo.DestroyObjectImmediate(editorComp);
+
+			bCompanionSetupWindow.ShowAvatarSetupComplete();
+		}
+
+		/// <summary>
+		/// Builds the per-device settings the inspector normally creates on its first draw, so the
+		/// one-click action can run without the inspector ever having been opened.
+		/// </summary>
+		internal static void EnsureUserSettings(bHapticsOSCIntegration editorComp)
+		{
+			if (editorComp.AllUserSettings != null)
+				return;
+
+			editorComp.AllUserSettings = new Dictionary<bDeviceTemplate, bUserSettings>();
+			foreach (bDeviceTemplate template in bDevice.AllTemplates.Values)
+			{
+				if (!template.HasBone)
+					continue;
+
+				bUserSettings newSettings = CreateInstance<bUserSettings>();
+				newSettings.Bone = template.Bone;
+
+				var getNewPrefab = new Func<bUserSettings, GameObject>(x => x.ShowMesh
+					? (x.IsMobile ? template.PrefabMeshMobile : template.PrefabMesh)
+					: (x.IsMobile ? template.PrefabMobile : template.Prefab));
+
+				newSettings.OnShowMeshChange = thisSettings => thisSettings.SwapPrefabs(editorComp, getNewPrefab(thisSettings));
+				newSettings.OnIsMobileChange = thisSettings => thisSettings.SwapPrefabs(editorComp, getNewPrefab(thisSettings));
+				editorComp.AllUserSettings[template] = newSettings;
+			}
+		}
 
 		/// <summary>
 		/// Explains why the component cannot be used where it is, and offers the one-click fix.

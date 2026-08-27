@@ -1,4 +1,5 @@
 #if UNITY_EDITOR && VRC_SDK_VRCSDK3 && bHapticsOSC_HasVrcFury
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -18,8 +19,55 @@ namespace bHapticsOSC.VRChat
             HumanBodyBones.Spine,
         };
 
+        /// <summary>
+        /// A limb whose length tells us how much bigger or smaller this avatar is than the one the
+        /// device prefab was authored for. Each entry lists fallbacks, because humanoid rigs
+        /// legitimately omit optional bones.
+        /// </summary>
+        private readonly struct bSegment
+        {
+            internal bSegment(HumanBodyBones[] anchor, HumanBodyBones[] far)
+            {
+                Anchor = anchor;
+                Far = far;
+            }
+
+            internal HumanBodyBones[] Anchor { get; }
+
+            /// <summary>Empty means "measure to the top of the avatar instead", used for the head.</summary>
+            internal HumanBodyBones[] Far { get; }
+        }
+
+        private static readonly Dictionary<bDeviceType, bSegment> Segments = new Dictionary<bDeviceType, bSegment>
+        {
+            [bDeviceType.HEAD] = new bSegment(
+                new[] { HumanBodyBones.Head },
+                new HumanBodyBones[0]),
+
+            [bDeviceType.ARM_LEFT] = new bSegment(
+                new[] { HumanBodyBones.LeftLowerArm },
+                new[] { HumanBodyBones.LeftHand }),
+            [bDeviceType.ARM_RIGHT] = new bSegment(
+                new[] { HumanBodyBones.RightLowerArm },
+                new[] { HumanBodyBones.RightHand }),
+
+            [bDeviceType.HAND_LEFT] = new bSegment(
+                new[] { HumanBodyBones.LeftHand },
+                new[] { HumanBodyBones.LeftMiddleProximal, HumanBodyBones.LeftIndexProximal, HumanBodyBones.LeftMiddleDistal }),
+            [bDeviceType.HAND_RIGHT] = new bSegment(
+                new[] { HumanBodyBones.RightHand },
+                new[] { HumanBodyBones.RightMiddleProximal, HumanBodyBones.RightIndexProximal, HumanBodyBones.RightMiddleDistal }),
+
+            [bDeviceType.FOOT_LEFT] = new bSegment(
+                new[] { HumanBodyBones.LeftFoot },
+                new[] { HumanBodyBones.LeftToes }),
+            [bDeviceType.FOOT_RIGHT] = new bSegment(
+                new[] { HumanBodyBones.RightFoot },
+                new[] { HumanBodyBones.RightToes }),
+        };
+
         public static bool Supports(bDeviceType deviceType)
-            => deviceType == bDeviceType.VEST;
+            => deviceType == bDeviceType.VEST || Segments.ContainsKey(deviceType);
 
         public static bool TryApply(bHapticsOSCIntegration editorComp, bDeviceType deviceType, bUserSettings userSettings, out string message)
         {
@@ -37,12 +85,150 @@ namespace bHapticsOSC.VRChat
 
             if (userSettings == null || userSettings.CurrentPrefab == null)
             {
-                message = "Auto-fit needs an added vest prefab.";
+                message = "Auto-fit needs the device to be added first.";
                 return false;
             }
 
-            return TryApplyVest(editorComp, userSettings, out message);
+            if (deviceType == bDeviceType.VEST)
+                return TryApplyVest(editorComp, userSettings, out message);
+
+            return TryApplySegmentDevice(editorComp, deviceType, userSettings, out message);
         }
+
+        /// <summary>
+        /// Fits every device that is not the vest.
+        ///
+        /// These prefabs carry absolute transforms authored for one reference avatar, so they are
+        /// anchored to the right bone but the wrong size on anyone else - visibly so on a very
+        /// small or very tall avatar. The device mesh was authored to span its limb, so the ratio
+        /// between this avatar's limb and the authored device length is how much to scale by.
+        /// Position scales with it, keeping the device sitting where it was authored to sit
+        /// relative to the bone.
+        /// </summary>
+        private static bool TryApplySegmentDevice(
+            bHapticsOSCIntegration editorComp,
+            bDeviceType deviceType,
+            bUserSettings userSettings,
+            out string message)
+        {
+            Animator animator = editorComp.avatarAnimator;
+            bSegment segment = Segments[deviceType];
+
+            if (!TryGetBone(animator, segment.Anchor, out HumanBodyBones anchorBone, out Transform anchorTransform))
+            {
+                message = "Auto-fit needs the avatar's " + DescribeBones(segment.Anchor)
+                          + " bone, which this rig does not have.";
+                return false;
+            }
+
+            if (!TryMeasureSegment(
+                    editorComp, animator, anchorTransform, segment,
+                    userSettings.CurrentPrefab.transform, out float measured))
+            {
+                message = "Auto-fit could not measure this avatar's "
+                          + bDevice.AllTemplates[deviceType].Name.ToLowerInvariant() + ".";
+                return false;
+            }
+
+            if (!TryGetAuthoredLength(userSettings.CurrentPrefab, out float authored, out Vector3 authoredScale, out Vector3 authoredPosition))
+            {
+                message = "Auto-fit could not read the device prefab's authored size.";
+                return false;
+            }
+
+            float ratio = Mathf.Clamp(measured / authored, MinScale, MaxScale);
+            Vector3 targetScale = ClampScale(authoredScale * ratio);
+
+            Transform prefabTransform = userSettings.CurrentPrefab.transform;
+            Undo.RecordObject(prefabTransform, $"[{bHapticsOSCIntegration.SystemName}] Auto-Fit");
+
+            HumanBodyBones originalBone = userSettings.Bone;
+            try
+            {
+                userSettings.Bone = anchorBone;
+                userSettings.SetBoneLocalTransform(
+                    animator,
+                    authoredPosition * ratio,
+                    GetDefaultLocalRotation(userSettings.CurrentPrefab).eulerAngles,
+                    targetScale);
+            }
+            finally
+            {
+                userSettings.Bone = originalBone;
+            }
+
+            EditorUtility.SetDirty(prefabTransform);
+            message = ratio > 0.99f && ratio < 1.01f
+                ? "This avatar matches the size the device was authored for, so nothing needed changing."
+                : $"Scaled to {ratio:0.00}x for this avatar. Use the transform fields for final tweaks.";
+            return true;
+        }
+
+        /// <summary>
+        /// How long this avatar's limb is, in the anchor bone's own space so it is comparable with
+        /// the authored device. With no far bone - the head - it measures to the top of the avatar.
+        /// </summary>
+        private static bool TryMeasureSegment(
+            bHapticsOSCIntegration editorComp,
+            Animator animator,
+            Transform anchorTransform,
+            bSegment segment,
+            Transform excludeFromBounds,
+            out float measured)
+        {
+            measured = 0f;
+
+            if (segment.Far.Length > 0)
+            {
+                if (!TryGetBone(animator, segment.Far, out _, out Transform farTransform))
+                    return false;
+
+                measured = Vector3.Distance(anchorTransform.position, farTransform.position);
+                return measured > MinMeasurement;
+            }
+
+            // Exclude the device's own mesh, or the head device would be measured against
+            // bounds it is itself inflating.
+            if (!TryGetAvatarLocalBounds(editorComp, excludeFromBounds, out Bounds bounds))
+                return false;
+
+            Vector3 anchorLocal = editorComp.transform.InverseTransformPoint(anchorTransform.position);
+            measured = Mathf.Abs(bounds.max.y - anchorLocal.y);
+            return measured > MinMeasurement;
+        }
+
+        /// <summary>
+        /// The device's authored world-space length, taken from the prefab asset rather than the
+        /// instance in the scene - the instance may already have been auto-fitted or hand-tweaked,
+        /// and fitting from a fitted value compounds.
+        /// </summary>
+        private static bool TryGetAuthoredLength(
+            GameObject instance,
+            out float length,
+            out Vector3 authoredScale,
+            out Vector3 authoredPosition)
+        {
+            length = 0f;
+            authoredScale = Vector3.one;
+            authoredPosition = Vector3.zero;
+
+            var prefab = PrefabUtility.GetCorrespondingObjectFromOriginalSource(instance) as GameObject;
+            if (prefab == null)
+                return false;
+
+            authoredScale = prefab.transform.localScale;
+            authoredPosition = prefab.transform.localPosition;
+
+            if (!TryGetPrefabReferenceBounds(prefab.transform, out Bounds bounds))
+                return false;
+
+            Vector3 size = Vector3.Scale(GetSafeReferenceSize(bounds.size), authoredScale);
+            length = Mathf.Max(size.x, Mathf.Max(size.y, size.z));
+            return length > MinMeasurement;
+        }
+
+        private static string DescribeBones(HumanBodyBones[] bones)
+            => bones.Length == 0 ? "root" : ObjectNames.NicifyVariableName(bones[0].ToString()).ToLowerInvariant();
 
         private static bool TryApplyVest(bHapticsOSCIntegration editorComp, bUserSettings userSettings, out string message)
         {

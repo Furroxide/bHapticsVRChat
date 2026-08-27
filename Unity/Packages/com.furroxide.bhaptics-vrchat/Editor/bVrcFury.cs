@@ -78,6 +78,16 @@ namespace bHapticsOSC.VRChat
                     EditorUtility.SetDirty(settings.CurrentPrefab);
                 }
 
+                // VRCFury's API adds its components with a plain AddComponent, so nothing it
+                // created is on the undo stack. Register the exact set this run added - the same
+                // diff the failure path below already uses - or Ctrl+Z leaves the avatar looking
+                // reverted while stale VRCFury components stay behind on it.
+                foreach (KeyValuePair<GameObject, MonoBehaviour[]> pair in existingComponents)
+                {
+                    foreach (MonoBehaviour created in GetNewVrcFuryComponents(pair.Key, pair.Value))
+                        Undo.RegisterCreatedObjectUndo(created, "Create bHapticsOSC VRCFury setup");
+                }
+
                 RemoveComponents(existingComponents.Values.SelectMany(components => components));
             }
             catch
@@ -286,10 +296,14 @@ namespace bHapticsOSC.VRChat
                 .ToArray();
         }
 
+        /// <summary>
+        /// Destroys through Undo so that replacing a previous setup is reversible too - the
+        /// components this removes were part of the user's avatar a moment ago.
+        /// </summary>
         private static void RemoveComponents(IEnumerable<MonoBehaviour> components)
         {
             foreach (MonoBehaviour component in components.Where(component => component != null).ToArray())
-                UnityEngine.Object.DestroyImmediate(component);
+                Undo.DestroyObjectImmediate(component);
         }
     }
 }

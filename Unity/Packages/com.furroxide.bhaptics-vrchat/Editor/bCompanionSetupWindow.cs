@@ -19,6 +19,7 @@ namespace bHapticsOSC.VRChat
         private string actionMessage = string.Empty;
         private MessageType actionMessageType = MessageType.None;
         private bool avatarSetupJustCompleted;
+        private bool showOtherOptions;
 
         /// <summary>
         /// Set while the window is being opened by something other than the user, so the
@@ -72,6 +73,9 @@ namespace bHapticsOSC.VRChat
         private void OnFocus()
             => Recheck();
 
+        private void OnSelectionChange()
+            => Repaint();
+
         private void OnGUI()
         {
             scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
@@ -91,6 +95,8 @@ namespace bHapticsOSC.VRChat
             }
 
             DrawPackageChecklist();
+            GUILayout.Space(8f);
+            DrawAvatarSection();
             GUILayout.Space(8f);
             DrawCompanionSection();
             GUILayout.Space(8f);
@@ -121,6 +127,57 @@ namespace bHapticsOSC.VRChat
             DrawChecklistItem(vrcFurySupported, "VRCFury", vrcFuryDetails);
         }
 
+        /// <summary>
+        /// The half of the journey the assistant used to leave out entirely. Everything else here
+        /// is about software; this is about the user's avatar, which is what they came to do.
+        /// </summary>
+        private void DrawAvatarSection()
+        {
+            EditorGUILayout.LabelField("Your avatar", EditorStyles.boldLabel);
+
+#if VRC_SDK_VRCSDK3 && bHapticsOSC_HasVrcFury
+            var avatar = bAvatarSetup.FindAvatar(Selection.activeGameObject);
+            bAvatarSetup.bReadiness readiness = bAvatarSetup.Inspect(avatar, out string detail);
+
+            switch (readiness)
+            {
+                case bAvatarSetup.bReadiness.NoAvatar:
+                    DrawChecklistItem("Action", "Avatar", "Select your avatar in the Hierarchy and this will set it up.");
+                    return;
+
+                case bAvatarSetup.bReadiness.NotHumanoid:
+                    DrawChecklistItem("Action", "Avatar", detail + " bHaptics devices attach to humanoid bones.");
+                    return;
+
+                case bAvatarSetup.bReadiness.AlreadySetUp:
+                    DrawChecklistItem("Ready", avatar.name, "Already set up. Upload it with the VRChat SDK to use it.");
+                    break;
+
+                default:
+                    DrawChecklistItem("Action", avatar.name, detail
+                        + " One press adds the devices, fits them to this avatar, and builds the VRCFury setup.");
+                    break;
+            }
+
+            string label = readiness == bAvatarSetup.bReadiness.AlreadySetUp
+                ? "Set up " + avatar.name + " again"
+                : "Set up " + avatar.name;
+
+            if (GUILayout.Button(label, GUILayout.Height(26f)))
+            {
+                if (bAvatarSetup.Run(avatar.gameObject))
+                    Recheck();
+
+                GUIUtility.ExitGUI();
+            }
+#else
+            DrawChecklistItem(
+                "Action",
+                "Avatar",
+                "The VRChat Avatars SDK and VRCFury need to be installed before an avatar can be set up.");
+#endif
+        }
+
         private void DrawCompanionSection()
         {
             EditorGUILayout.LabelField("Windows companion app", EditorStyles.boldLabel);
@@ -148,13 +205,31 @@ namespace bHapticsOSC.VRChat
 
             bool isWindows = Application.platform == RuntimePlatform.WindowsEditor;
 
+            DrawInstallerState();
+
+            // One obvious next step, sized to matter, before the rest. Eight equal buttons made the
+            // user work out which one their situation called for.
+            using (new EditorGUI.DisabledScope(bCompanionInstaller.IsBusy))
+            {
+                if (GUILayout.Button(PrimaryActionLabel(), GUILayout.Height(26f)))
+                {
+                    RunPrimaryAction();
+                    GUIUtility.ExitGUI();
+                }
+            }
+
+            GUILayout.Space(2f);
+            showOtherOptions = EditorGUILayout.Foldout(showOtherOptions, "Other options", true);
+            if (!showOtherOptions)
+                return;
+
             using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button(bCompanionStatusGUI.GetDownloadButtonLabel(companionStatus)))
-                    Application.OpenURL(bCompanionRequirements.GetMatchingDownloadUrl(companionStatus.RequiredVersion));
+                if (GUILayout.Button("Open the releases page"))
+                    Application.OpenURL(bCompanionRequirements.ReleasesUrl);
 
-                if (GUILayout.Button("Latest release"))
-                    Application.OpenURL(bCompanionRequirements.LatestReleaseUrl);
+                if (GUILayout.Button("Download in a browser"))
+                    Application.OpenURL(bCompanionRequirements.GetMatchingDownloadUrl(companionStatus.RequiredVersion));
             }
 
             using (new EditorGUILayout.HorizontalScope())
@@ -303,6 +378,125 @@ namespace bHapticsOSC.VRChat
             }
 
             return lead;
+        }
+
+        /// <summary>
+        /// The single thing this state calls for. Every other control stays available under Other
+        /// options; this is only about which one the user should reach for first.
+        /// </summary>
+        private string PrimaryActionLabel()
+        {
+            if (companionStatus.HasUnsupportedProcessRunning)
+                return "Stop the unsupported app";
+
+            switch (companionStatus.Status)
+            {
+                case bCompanionStatus.ReadyStopped:
+                    return "Start bHapticsOSC";
+                case bCompanionStatus.ReadyRunning:
+                    return "Running - nothing to do here";
+                case bCompanionStatus.NotLocated:
+                case bCompanionStatus.MissingPath:
+                    return bCompanionInstaller.IsSupportedPlatform ? "Install the companion app" : "Open the releases page";
+                case bCompanionStatus.ForeignBuild:
+                case bCompanionStatus.Outdated:
+                    return bCompanionInstaller.IsSupportedPlatform ? "Install the supported build" : "Open the releases page";
+                case bCompanionStatus.InvalidProduct:
+                case bCompanionStatus.RunningUninspectable:
+                    return "Locate bHapticsOSC.exe";
+                default:
+                    return "Open the releases page";
+            }
+        }
+
+        private void RunPrimaryAction()
+        {
+            if (companionStatus.HasUnsupportedProcessRunning)
+            {
+                StopUnsupportedCompanion();
+                return;
+            }
+
+            switch (companionStatus.Status)
+            {
+                case bCompanionStatus.ReadyStopped:
+                    LaunchCompanion();
+                    return;
+
+                case bCompanionStatus.ReadyRunning:
+                    Recheck();
+                    return;
+
+                case bCompanionStatus.NotLocated:
+                case bCompanionStatus.MissingPath:
+                case bCompanionStatus.ForeignBuild:
+                case bCompanionStatus.Outdated:
+                    if (bCompanionInstaller.IsSupportedPlatform)
+                    {
+                        // Try what is already on disk before reaching for the network.
+                        RunAutoLocate(false);
+                        if (!companionStatus.IsReady)
+                            bCompanionInstaller.Begin(companionStatus.RequiredVersion);
+
+                        return;
+                    }
+
+                    Application.OpenURL(bCompanionRequirements.ReleasesUrl);
+                    return;
+
+                case bCompanionStatus.InvalidProduct:
+                case bCompanionStatus.RunningUninspectable:
+                    LocateExistingApp();
+                    return;
+
+                default:
+                    Application.OpenURL(bCompanionRequirements.ReleasesUrl);
+                    return;
+            }
+        }
+
+        /// <summary>
+        /// Progress drawn in the window rather than behind a modal bar, so the editor stays usable
+        /// while a several-megabyte download runs.
+        /// </summary>
+        private void DrawInstallerState()
+        {
+            if (bCompanionInstaller.Phase == bCompanionInstaller.bInstallPhase.Idle)
+                return;
+
+            if (bCompanionInstaller.IsBusy)
+            {
+                Rect bar = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
+                EditorGUI.ProgressBar(bar, bCompanionInstaller.Progress, bCompanionInstaller.Message);
+
+                if (GUILayout.Button("Cancel"))
+                    bCompanionInstaller.Cancel();
+
+                Repaint();
+                return;
+            }
+
+            bool failed = bCompanionInstaller.Phase == bCompanionInstaller.bInstallPhase.Failed;
+            EditorGUILayout.HelpBox(
+                bCompanionInstaller.Message,
+                failed ? MessageType.Warning : MessageType.Info);
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (!failed && GUILayout.Button("Start it now"))
+                {
+                    Recheck();
+                    LaunchCompanion();
+                }
+
+                if (GUILayout.Button("Dismiss"))
+                {
+                    bCompanionInstaller.Dismiss();
+                    Recheck();
+                }
+            }
+
+            GUILayout.Space(4f);
         }
 
         private static void DrawChecklistItem(bool ready, string title, string details)
