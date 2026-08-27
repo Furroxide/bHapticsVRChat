@@ -1,0 +1,80 @@
+name: Build VPM Listing
+
+# Deliberately not triggered by `release:` events. They run at a tag ref, and the
+# github-pages environment only permits deployments from a branch, so those runs are rejected
+# outright. `release: created` also fires when the Release workflow opens its draft - before
+# any asset is uploaded - which would build an empty listing. The workflow_run trigger below
+# covers the real case: it fires after Release finishes on main, with every asset published.
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Release
+    types:
+      - completed
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-listing:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out the released source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.event.repository.default_branch }}
+
+      - name: Check out the VRChat listing builder
+        uses: actions/checkout@v4
+        with:
+          repository: vrchat-community/package-list-action
+          ref: cb31c3b5d17d1070d7741c61de2ca1b219224039
+          path: ci
+          clean: false
+
+      - name: Restore listing-builder cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ci/.nuke/temp
+            ~/.nuget/packages
+          key: ${{ runner.os }}-vpm-listing-${{ hashFiles('ci/**/global.json', 'ci/**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-vpm-listing-
+
+      - name: Build repository listing
+        shell: bash
+        run: >-
+          ci/build.cmd BuildRepoListing
+          --root ci
+          --list-publish-directory "$GITHUB_WORKSPACE/Website"
+          --current-package-name com.furroxide.bhaptics-vrchat
+          --current-listing-url "https://vpm.furroxide.dev/__rebuild-all-releases__.json"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: Website
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

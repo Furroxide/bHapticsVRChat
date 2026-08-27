@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{{ listingInfo.Description }}">
+  <title>{{ listingInfo.Name }}</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main>
+    <section class="hero" aria-labelledby="page-title">
+      <p class="eyebrow">VRChat Creator Companion repository</p>
+      <h1 id="page-title">{{ listingInfo.Name }}</h1>
+      <p class="lede">{{ listingInfo.Description }}</p>
+      <div class="actions">
+        <button class="primary" id="add-repository" type="button">Add to VCC</button>
+        <a class="secondary" href="{{ listingInfo.InfoLink.Url }}">View project</a>
+      </div>
+      <div class="repository-url">
+        <label for="listing-url">Manual repository URL</label>
+        <div class="copy-row">
+          <input id="listing-url" value="{{ listingInfo.Url }}" readonly>
+          <button id="copy-url" type="button">Copy</button>
+        </div>
+        <p id="copy-status" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section class="packages" aria-labelledby="packages-title">
+      <div class="section-heading">
+        <h2 id="packages-title">Available packages</h2>
+        <p>Install and update these packages from VCC after adding the repository.</p>
+      </div>
+      <div class="package-grid">
+        {{~ for package in packages ~}}
+        <article class="package-card">
+          <div>
+            <p class="package-id">{{ package.Name }}</p>
+            <h3>{{ package.DisplayName }}</h3>
+            <p>{{ package.Description }}</p>
+          </div>
+          <div class="package-meta">
+            <span>Version {{ package.Version }}</span>
+            <a href="{{ package.ZipUrl }}">Download ZIP</a>
+          </div>
+        </article>
+        {{~ end ~}}
+      </div>
+    </section>
+
+    <section class="steps" aria-labelledby="steps-title">
+      <h2 id="steps-title">Before installing</h2>
+      <ol>
+        <li>Add the VRCFury repository at <code>https://vcc.vrcfury.com/</code>.</li>
+        <li>Add this repository, then install <code>com.furroxide.bhaptics-vrchat</code>.</li>
+        <li>Download and run <code>bHapticsOSC.exe</code> separately while using VRChat.</li>
+      </ol>
+      <p>The legacy <code>.unitypackage</code> remains available as a fallback. Do not install both formats in the same project.</p>
+    </section>
+  </main>
+  <footer>
+    Published by <a href="{{ listingInfo.Author.Url }}">{{ listingInfo.Author.Name }}</a>.
+  </footer>
+</body>
+</html>

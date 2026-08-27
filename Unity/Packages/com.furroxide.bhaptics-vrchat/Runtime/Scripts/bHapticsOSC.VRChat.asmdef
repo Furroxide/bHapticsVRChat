@@ -1,0 +1,30 @@
+{
+  "name": "bHapticsOSC.VRChat",
+  "rootNamespace": "bHapticsOSC.VRChat",
+  "references": [
+    "VRC.SDKBase",
+    "VRC.SDK3A",
+    "Furroxide.ContactCompressor",
+    "Furroxide.ContactCompressor.Core"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [
+    {
+      "name": "com.vrcfury.vrcfury",
+      "expression": "[1.1341.0,2.0.0)",
+      "define": "bHapticsOSC_HasVrcFury"
+    },
+    {
+      "name": "com.furroxide.contact-compressor",
+      "expression": "[0.1.0,1.0.0)",
+      "define": "bHapticsOSC_HasContactCompressor"
+    }
+  ],
+  "noEngineReferences": false
+}

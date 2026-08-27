@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Public API is documented where it matters; enum members and POCO fields carry their meaning in their names. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <PackageId>Furroxide.ContactCompressor.Decoder</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Furroxide</Authors>
+    <Description>Decodes VRChat Contact Compressor OSC parameters into contact positions. Device agnostic: give it parameter name/value pairs and it gives you where you were touched.</Description>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/furroxide/bHapticsVRChat</RepositoryUrl>
+  </PropertyGroup>
+
+  <!--
+    The encode/decode maths is shared verbatim with the Unity package rather than reimplemented.
+    Furroxide.ContactCompressor.Core is deliberately engine-free (noEngineReferences) so the exact
+    same source compiles on both sides; a reimplementation would be free to drift, and this maths
+    has to agree bit for bit with what the avatar emits.
+  -->
+  <ItemGroup>
+    <Compile Include="..\..\Unity\Packages\com.furroxide.contact-compressor\Runtime\Core\*.cs">
+      <Link>Shared\%(Filename)%(Extension)</Link>
+    </Compile>
+  </ItemGroup>
+
+</Project>

@@ -1,5 +1,17 @@
 {
   "dependencies": {
+    "com.furroxide.bhaptics-vrchat": {
+      "version": "file:com.furroxide.bhaptics-vrchat",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {}
+    },
+    "com.furroxide.contact-compressor": {
+      "version": "file:com.furroxide.contact-compressor",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {}
+    },
     "com.unity.ai.navigation": {
       "version": "1.1.7",
       "depth": 0,
@@ -163,6 +175,18 @@
         "com.unity.xr.management": "4.4.0"
       },
       "url": "https://packages.unity.com"
+    },
+    "com.vrcfury.temp": {
+      "version": "file:com.vrcfury.temp",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {}
+    },
+    "com.vrcfury.vrcfury": {
+      "version": "file:com.vrcfury.vrcfury",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {}
     },
     "com.vrchat.avatars": {
       "version": "file:com.vrchat.avatars",

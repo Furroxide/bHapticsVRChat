@@ -1,0 +1,311 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.validate.outputs.version }}
+      tag: ${{ steps.validate.outputs.tag }}
+      vpm_archive: ${{ steps.validate.outputs.vpm_archive }}
+      compressor_archive: ${{ steps.validate.outputs.compressor_archive }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Validate release metadata
+        id: validate
+        shell: pwsh
+        env:
+          BASE_REF: ${{ github.event.before }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./Tools/Validate-ReleaseMetadata.ps1 -BaseRef "$env:BASE_REF" -ChangelogEntryPath release-notes.md -AllowCurrentCommitTag
+
+      - name: Upload release notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
+          if-no-files-found: error
+          retention-days: 7
+
+  build-exe:
+    name: Build bHapticsOSC.exe
+    runs-on: windows-latest
+    needs: validate
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build Release executable
+        shell: pwsh
+        run: |
+          dotnet msbuild External\bHapticsOSC\bHapticsOSC.sln /m /restore /p:Configuration=Release /p:Platform="Any CPU"
+
+      - name: Validate and stage executable
+        shell: pwsh
+        run: |
+          $outputPath = "External\bHapticsOSC\Output\Release"
+          $exePath = Join-Path $outputPath "bHapticsOSC.exe"
+          if (-not (Test-Path -LiteralPath $exePath)) {
+              throw "Expected executable was not produced: $exePath"
+          }
+
+          $expectedVersion = (Get-Content -LiteralPath VERSION -Raw).Trim()
+          $versionInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path -LiteralPath $exePath).Path)
+          if ($versionInfo.ProductName -cne 'bHapticsOSC') {
+              throw "Executable ProductName must be 'bHapticsOSC', got '$($versionInfo.ProductName)'."
+          }
+
+          try {
+              $actualFileVersion = [Version]$versionInfo.FileVersion
+          } catch {
+              throw "Executable FileVersion is not a valid version: '$($versionInfo.FileVersion)'."
+          }
+          $actualCoreVersion = "$($actualFileVersion.Major).$($actualFileVersion.Minor).$($actualFileVersion.Build)"
+          if ($actualCoreVersion -cne $expectedVersion -or $actualFileVersion.Revision -gt 0) {
+              throw "Executable FileVersion ($actualFileVersion) must match VERSION ($expectedVersion), with no nonzero fourth component."
+          }
+
+          $dlls = @(Get-ChildItem -LiteralPath $outputPath -Filter '*.dll' -File)
+          if ($dlls.Count -gt 0) {
+              $names = ($dlls | ForEach-Object { $_.Name }) -join ', '
+              throw "Single-exe packaging failed; DLLs remain in the release output: $names"
+          }
+
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          Copy-Item -LiteralPath $exePath -Destination artifacts\bHapticsOSC.exe
+
+      - name: Upload executable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bHapticsOSC.exe
+          path: artifacts/bHapticsOSC.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  build-unity-package:
+    name: Build Unity package
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: 60
+    environment: unity-pr-artifacts
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Resolve VPM packages
+        uses: anatawa12/sh-actions/resolve-vpm-packages@1d155c7a26bcd0a54ffd9cb38fd66ab0d32d23cd
+        with:
+          project-path: Unity
+          repos: |
+            https://vcc.vrcfury.com/
+
+      - name: Remove unused VRChat SDK samples
+        shell: bash
+        run: |
+          rm -rf \
+            Unity/Packages/com.vrchat.avatars/Samples \
+            Unity/Packages/com.vrchat.avatars/Samples.meta
+
+      - name: Stage legacy Unity package project
+        shell: pwsh
+        run: |
+          ./Tools/Export-UnityPackage.ps1 -ProjectPath Unity -StagingPath UnityLegacyExport -StageOnly
+
+      - name: Export Unity package
+        uses: game-ci/unity-builder@1d4ee0697f193f54668e98961d79907911f4b4f2 # v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: UnityLegacyExport
+          unityVersion: 2022.3.22f1
+          targetPlatform: StandaloneWindows64
+          buildMethod: bHapticsOSC.VRChat.bPackageExporter.ExportFromCommandLine
+          customParameters: -bHapticsExportPath /github/workspace/dist/bHapticsOSC-VRChat.unitypackage
+          manualExit: true
+          versioning: None
+          allowDirtyBuild: true
+
+      - name: Upload Unity package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bHapticsOSC-VRChat.unitypackage
+          path: dist/bHapticsOSC-VRChat.unitypackage
+          if-no-files-found: error
+          retention-days: 7
+
+  build-vpm-package:
+    name: Build VPM package
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build deterministic VPM archive
+        id: build_vpm
+        shell: pwsh
+        run: |
+          ./Tools/Build-VpmPackage.ps1
+
+      # The avatar package declares this as a vpmDependency, so the listing has to carry it or
+      # VCC installs a package it cannot resolve. The listing builder reads every .zip asset in
+      # every release and takes each package's identity from the manifest inside it, so a second
+      # archive is all this needs.
+      - name: Build deterministic Contact Compressor VPM archive
+        id: build_compressor
+        shell: pwsh
+        run: |
+          ./Tools/Build-VpmPackage.ps1 `
+            -PackagePath Unity/Packages/com.furroxide.contact-compressor `
+            -ExpectedPackageName com.furroxide.contact-compressor
+
+      - name: Upload VPM archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build_vpm.outputs.archive_name }}
+          path: ${{ steps.build_vpm.outputs.archive_path }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload Contact Compressor VPM archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build_compressor.outputs.archive_name }}
+          path: ${{ steps.build_compressor.outputs.archive_path }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload VPM manifest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package.json
+          path: ${{ steps.build_vpm.outputs.manifest_path }}
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub release
+    runs-on: ubuntu-latest
+    needs:
+      - validate
+      - build-exe
+      - build-unity-package
+      - build-vpm-package
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Publish release atomically
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.validate.outputs.tag }}
+          VPM_ARCHIVE: ${{ needs.validate.outputs.vpm_archive }}
+          COMPRESSOR_ARCHIVE: ${{ needs.validate.outputs.compressor_archive }}
+        run: |
+          set -euo pipefail
+
+          test -f release/bHapticsOSC.exe
+          test -f release/bHapticsOSC-VRChat.unitypackage
+          test -f "release/$VPM_ARCHIVE"
+          test -f "release/$COMPRESSOR_ARCHIVE"
+          test -f release/package.json
+          test -f release/release-notes.md
+
+          if existing_draft="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null)"; then
+            if [ "$existing_draft" != "true" ]; then
+              echo "Release $TAG already exists and is not a recoverable draft."
+              exit 1
+            fi
+
+            draft_target="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq .targetCommitish)"
+            if [ "$draft_target" != "$GITHUB_SHA" ]; then
+              echo "Draft release $TAG targets $draft_target instead of $GITHUB_SHA; refusing to overwrite it."
+              exit 1
+            fi
+
+            gh release edit "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --draft \
+              --title "$TAG" \
+              --notes-file release/release-notes.md
+          else
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --draft \
+              --target "$GITHUB_SHA" \
+              --title "$TAG" \
+              --notes-file release/release-notes.md
+          fi
+
+          gh release upload "$TAG" \
+            release/bHapticsOSC.exe \
+            release/bHapticsOSC-VRChat.unitypackage \
+            "release/$VPM_ARCHIVE" \
+            "release/$COMPRESSOR_ARCHIVE" \
+            release/package.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
+          published_assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          published_asset_count="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')"
+          if [ "$published_asset_count" -ne 5 ]; then
+            echo "Draft release $TAG contains $published_asset_count assets; expected exactly 5."
+            exit 1
+          fi
+
+          for required_asset in \
+            bHapticsOSC.exe \
+            bHapticsOSC-VRChat.unitypackage \
+            "$VPM_ARCHIVE" \
+            "$COMPRESSOR_ARCHIVE" \
+            package.json
+          do
+            grep -Fxq "$required_asset" <<< "$published_assets"
+          done
+
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false

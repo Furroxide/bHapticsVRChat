@@ -1,0 +1,119 @@
+name: PR Artifact Comment
+
+on:
+  workflow_run:
+    workflows:
+      - PR Artifacts
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  comment:
+    name: Comment artifact links
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: ${{ (github.event.workflow_run.event == 'pull_request' || github.event.workflow_run.event == 'workflow_dispatch') && github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Update PR artifact comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- bhaptics-pr-artifacts -->';
+            const { owner, repo } = context.repo;
+            const run = context.payload.workflow_run;
+
+            if (run.event === 'pull_request' && run.head_repository?.full_name === `${owner}/${repo}`) {
+              core.info('The PR Artifacts workflow comments on same-repository pull requests directly.');
+              return;
+            }
+
+            let pull = run.pull_requests?.find(pr => pr.base?.ref === 'main') ?? run.pull_requests?.[0];
+
+            if (!pull) {
+              const associated = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner,
+                repo,
+                commit_sha: run.head_sha,
+              });
+
+              pull = associated.data.find(pr => pr.base.ref === 'main' && pr.state === 'open')
+                ?? associated.data.find(pr => pr.base.ref === 'main');
+            }
+
+            if (!pull) {
+              core.info(`No associated pull request found for workflow run ${run.id}.`);
+              return;
+            }
+
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+              owner,
+              repo,
+              run_id: run.id,
+              per_page: 100,
+            });
+
+            const wantedArtifacts = [
+              { label: 'bHapticsOSC.exe', find: item => item.name === 'bHapticsOSC.exe' },
+              { label: 'bHapticsOSC-VRChat.unitypackage', find: item => item.name === 'bHapticsOSC-VRChat.unitypackage' },
+              { label: 'VPM package ZIP', find: item => /^com\.furroxide\.bhaptics-vrchat-\d+\.\d+\.\d+\.zip$/.test(item.name) },
+              { label: 'VPM package.json', find: item => item.name === 'package.json' },
+            ];
+
+            const artifactRows = wantedArtifacts.map(({ label, find }) => {
+              const artifact = artifacts.find(item => find(item) && !item.expired);
+              if (!artifact) {
+                core.warning(`Expected artifact was not found: ${label}`);
+                return `| ${label} | Not found in this run |`;
+              }
+
+              const artifactUrl = `https://github.com/${owner}/${repo}/actions/runs/${run.id}/artifacts/${artifact.id}`;
+              return `| ${label} | [Download artifact](${artifactUrl}) |`;
+            });
+
+            const body = [
+              marker,
+              'PR build artifacts are ready.',
+              '',
+              '| Artifact | Link |',
+              '| --- | --- |',
+              ...artifactRows,
+              '',
+              `Workflow run: [${run.name} #${run.run_number}](${run.html_url})`,
+              `Commit: \`${run.head_sha.slice(0, 7)}\``,
+              '',
+              'Artifacts are temporary and expire according to the repository retention policy.',
+            ].join('\n');
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number: pull.number,
+              per_page: 100,
+            });
+
+            const existing = comments.find(comment =>
+              comment.user?.type === 'Bot' && comment.body?.includes(marker)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pull.number,
+                body,
+              });
+            }

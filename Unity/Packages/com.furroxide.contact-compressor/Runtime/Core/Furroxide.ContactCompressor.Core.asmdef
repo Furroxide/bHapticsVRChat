@@ -1,0 +1,14 @@
+{
+  "name": "Furroxide.ContactCompressor.Core",
+  "rootNamespace": "Furroxide.ContactCompressor",
+  "references": [],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": true
+}

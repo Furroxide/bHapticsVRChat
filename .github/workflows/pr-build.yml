@@ -1,0 +1,305 @@
+name: PR Artifacts
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-artifacts-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  audit-tracked-artifacts:
+    name: Audit tracked artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify normalized line endings
+        shell: bash
+        run: |
+          git add --renormalize .
+          if ! git diff --cached --quiet; then
+            echo "Files are not normalized according to .gitattributes:"
+            git diff --cached --name-only
+            exit 1
+          fi
+
+      - name: Reject committed binary artifacts
+        shell: bash
+        run: |
+          tracked="$(git ls-files '*.exe' '*.unitypackage' '*.dll' '*.pdb' 'com.furroxide.bhaptics-vrchat-*.zip' 'com.furroxide.contact-compressor-*.zip')"
+          if [ -n "$tracked" ]; then
+            echo "Binary build artifacts must not be tracked:"
+            echo "$tracked"
+            exit 1
+          fi
+
+  build-exe:
+    name: Build bHapticsOSC.exe
+    runs-on: windows-latest
+    needs: audit-tracked-artifacts
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build Release executable
+        shell: pwsh
+        run: |
+          dotnet msbuild External\bHapticsOSC\bHapticsOSC.sln /m /restore /p:Configuration=Release /p:Platform="Any CPU"
+
+      - name: Validate and stage Windows artifact
+        shell: pwsh
+        run: |
+          $outputPath = "External\bHapticsOSC\Output\Release"
+          $exePath = Join-Path $outputPath "bHapticsOSC.exe"
+          if (-not (Test-Path -LiteralPath $exePath)) {
+              throw "Expected executable was not produced: $exePath"
+          }
+
+          $expectedVersion = (Get-Content -LiteralPath VERSION -Raw).Trim()
+          $versionInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path -LiteralPath $exePath).Path)
+          if ($versionInfo.ProductName -cne 'bHapticsOSC') {
+              throw "Executable ProductName must be 'bHapticsOSC', got '$($versionInfo.ProductName)'."
+          }
+
+          try {
+              $actualFileVersion = [Version]$versionInfo.FileVersion
+          } catch {
+              throw "Executable FileVersion is not a valid version: '$($versionInfo.FileVersion)'."
+          }
+          $actualCoreVersion = "$($actualFileVersion.Major).$($actualFileVersion.Minor).$($actualFileVersion.Build)"
+          if ($actualCoreVersion -cne $expectedVersion -or $actualFileVersion.Revision -gt 0) {
+              throw "Executable FileVersion ($actualFileVersion) must match VERSION ($expectedVersion), with no nonzero fourth component."
+          }
+
+          $dlls = @(Get-ChildItem -LiteralPath $outputPath -Filter '*.dll' -File)
+          if ($dlls.Count -gt 0) {
+              $names = ($dlls | ForEach-Object { $_.Name }) -join ', '
+              throw "Single-exe packaging failed; DLLs remain in the release output: $names"
+          }
+
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          Copy-Item -LiteralPath $exePath -Destination artifacts\bHapticsOSC.exe
+
+      - name: Upload executable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bHapticsOSC.exe
+          path: artifacts/bHapticsOSC.exe
+          if-no-files-found: error
+          retention-days: 14
+
+  comment-pr-artifacts:
+    name: Comment PR artifacts
+    runs-on: ubuntu-latest
+    needs:
+      - build-exe
+      - build-unity-package
+      - build-vpm-package
+    timeout-minutes: 10
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Update PR artifact comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- bhaptics-pr-artifacts -->';
+            const { owner, repo } = context.repo;
+            const pull = context.payload.pull_request;
+
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+              owner,
+              repo,
+              run_id: context.runId,
+              per_page: 100,
+            });
+
+            const wantedArtifacts = [
+              { label: 'bHapticsOSC.exe', find: item => item.name === 'bHapticsOSC.exe' },
+              { label: 'bHapticsOSC-VRChat.unitypackage', find: item => item.name === 'bHapticsOSC-VRChat.unitypackage' },
+              { label: 'VPM package ZIP', find: item => /^com\.furroxide\.bhaptics-vrchat-\d+\.\d+\.\d+\.zip$/.test(item.name) },
+              { label: 'Contact Compressor VPM ZIP', find: item => /^com\.furroxide\.contact-compressor-\d+\.\d+\.\d+\.zip$/.test(item.name) },
+              { label: 'VPM package.json', find: item => item.name === 'package.json' },
+            ];
+
+            const artifactRows = wantedArtifacts.map(({ label, find }) => {
+              const artifact = artifacts.find(item => find(item) && !item.expired);
+              if (!artifact) {
+                core.warning(`Expected artifact was not found: ${label}`);
+                return `| ${label} | Not found in this run |`;
+              }
+
+              const artifactUrl = `https://github.com/${owner}/${repo}/actions/runs/${context.runId}/artifacts/${artifact.id}`;
+              return `| ${label} | [Download artifact](${artifactUrl}) |`;
+            });
+
+            const body = [
+              marker,
+              'PR build artifacts are ready.',
+              '',
+              '| Artifact | Link |',
+              '| --- | --- |',
+              ...artifactRows,
+              '',
+              `Workflow run: [${context.workflow} #${context.runNumber}](https://github.com/${owner}/${repo}/actions/runs/${context.runId})`,
+              `Commit: \`${context.sha.slice(0, 7)}\``,
+              '',
+              'Artifacts are temporary and expire according to the repository retention policy.',
+            ].join('\n');
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number: pull.number,
+              per_page: 100,
+            });
+
+            const existing = comments.find(comment =>
+              comment.user?.type === 'Bot' && comment.body?.includes(marker)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pull.number,
+                body,
+              });
+            }
+
+  build-unity-package:
+    name: Build Unity package
+    runs-on: ubuntu-latest
+    needs: audit-tracked-artifacts
+    timeout-minutes: 60
+    environment: unity-pr-artifacts
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Resolve VPM packages
+        uses: anatawa12/sh-actions/resolve-vpm-packages@1d155c7a26bcd0a54ffd9cb38fd66ab0d32d23cd
+        with:
+          project-path: Unity
+          repos: |
+            https://vcc.vrcfury.com/
+
+      - name: Remove unused VRChat SDK samples
+        shell: bash
+        run: |
+          rm -rf \
+            Unity/Packages/com.vrchat.avatars/Samples \
+            Unity/Packages/com.vrchat.avatars/Samples.meta
+
+      - name: Stage legacy Unity package project
+        shell: pwsh
+        run: |
+          ./Tools/Export-UnityPackage.ps1 -ProjectPath Unity -StagingPath UnityLegacyExport -StageOnly
+
+      - name: Export Unity package
+        uses: game-ci/unity-builder@1d4ee0697f193f54668e98961d79907911f4b4f2 # v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: UnityLegacyExport
+          unityVersion: 2022.3.22f1
+          targetPlatform: StandaloneWindows64
+          buildMethod: bHapticsOSC.VRChat.bPackageExporter.ExportFromCommandLine
+          customParameters: -bHapticsExportPath /github/workspace/dist/bHapticsOSC-VRChat.unitypackage
+          manualExit: true
+          versioning: None
+          allowDirtyBuild: true
+
+      - name: Upload Unity package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bHapticsOSC-VRChat.unitypackage
+          path: dist/bHapticsOSC-VRChat.unitypackage
+          if-no-files-found: error
+          retention-days: 14
+
+  build-vpm-package:
+    name: Build VPM package
+    runs-on: ubuntu-latest
+    needs: audit-tracked-artifacts
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build deterministic VPM archive
+        id: build_vpm
+        shell: pwsh
+        run: |
+          ./Tools/Build-VpmPackage.ps1
+
+      # Built here as well as in the release so a break in the dependency package shows up on the
+      # pull request rather than at publish time.
+      - name: Build deterministic Contact Compressor VPM archive
+        id: build_compressor
+        shell: pwsh
+        run: |
+          ./Tools/Build-VpmPackage.ps1 `
+            -PackagePath Unity/Packages/com.furroxide.contact-compressor `
+            -ExpectedPackageName com.furroxide.contact-compressor
+
+      - name: Upload VPM archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build_vpm.outputs.archive_name }}
+          path: ${{ steps.build_vpm.outputs.archive_path }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Contact Compressor VPM archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build_compressor.outputs.archive_name }}
+          path: ${{ steps.build_compressor.outputs.archive_path }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload VPM manifest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package.json
+          path: ${{ steps.build_vpm.outputs.manifest_path }}
+          if-no-files-found: error
+          retention-days: 14
