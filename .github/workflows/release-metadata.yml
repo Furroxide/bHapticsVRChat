@@ -57,6 +57,8 @@ jobs:
           RELEASE_PR: ${{ steps.scope.outputs.release_pr }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $extra = @()
-          if ($env:RELEASE_PR -ne 'true') { $extra += '-AllowUnchangedVersion' }
+          # A hashtable, not an array: splatting an array passes its elements positionally, so
+          # '-AllowUnchangedVersion' would bind to $RepositoryRoot rather than to the switch.
+          $extra = @{}
+          if ($env:RELEASE_PR -ne 'true') { $extra['AllowUnchangedVersion'] = $true }
           ./Tools/Validate-ReleaseMetadata.ps1 -BaseRef "origin/$env:BASE_REF" @extra
