@@ -6,7 +6,13 @@ param(
     [string]$GitHubToken = $env:GITHUB_TOKEN,
     [string]$ChangelogEntryPath,
     [switch]$AllowCurrentCommitTag,
-    [switch]$SkipRemoteReleaseCheck
+    [switch]$SkipRemoteReleaseCheck,
+
+    # For a change that does not claim to publish anything - a docs, CI or tooling pull request.
+    # It permits VERSION to equal the baseline instead of exceeding it, and drops the checks that
+    # ask whether this version has already been released, which it plainly has. A version that goes
+    # backwards is still rejected, and every other assertion in this script still runs.
+    [switch]$AllowUnchangedVersion
 )
 
 $ErrorActionPreference = 'Stop'
@@ -523,20 +529,36 @@ try {
     $candidateTag = "v$rootVersion"
     $excludedBaselineTag = if ($AllowCurrentCommitTag) { $candidateTag } else { $null }
     $baseline = Get-BaselineVersion $BaseRef $excludedBaselineTag
+    $versionIsUnchanged = $false
     if ($baseline) {
-        if ((Compare-StrictVersion $rootVersion $baseline.Version) -le 0) {
+        $versionComparison = Compare-StrictVersion $rootVersion $baseline.Version
+        $versionIsUnchanged = $versionComparison -eq 0
+
+        if ($versionComparison -lt 0) {
             Fail "VERSION ($rootVersion) must be greater than $($baseline.Source) ($($baseline.Version))."
         }
-        Write-Host "Version baseline: $($baseline.Source) = $($baseline.Version)"
+
+        if ($versionIsUnchanged -and -not $AllowUnchangedVersion) {
+            Fail "VERSION ($rootVersion) must be greater than $($baseline.Source) ($($baseline.Version))."
+        }
+
+        if ($versionIsUnchanged) {
+            Write-Host "VERSION is unchanged at $rootVersion; this change does not publish a release."
+        } else {
+            Write-Host "Version baseline: $($baseline.Source) = $($baseline.Version)"
+        }
     } else {
         Write-Warning 'No baseline VERSION or v* tag found; skipping version-increase comparison.'
     }
+
+    # Whether this version is already out is only a question for a change that means to release it.
+    $skipReleaseStateChecks = $AllowUnchangedVersion -and $versionIsUnchanged
 
     $changelogEntry = Get-ChangelogEntry (Join-Path $RepositoryRoot 'CHANGELOG.md') $rootVersion
 
     $tag = $candidateTag
     $remoteRelease = $null
-    if (-not $SkipRemoteReleaseCheck) {
+    if (-not $SkipRemoteReleaseCheck -and -not $skipReleaseStateChecks) {
         $remoteRelease = Get-RemoteRelease $ReleaseRepository $tag $GitHubToken
         if ($null -ne $remoteRelease) {
             if (-not [bool]$remoteRelease.draft) {
@@ -546,7 +568,9 @@ try {
     }
 
     $localTagExists = Test-LocalTagExists $tag
-    if ($null -eq $remoteRelease) {
+    if ($skipReleaseStateChecks) {
+        Write-Host "Skipping release-state checks for $tag; this change does not publish a release."
+    } elseif ($null -eq $remoteRelease) {
         if ($localTagExists) {
             $headCommit = Get-GitOutput @('rev-parse', 'HEAD')
             $tagCommit = Get-GitOutput @('rev-parse', "$tag^{commit}")
