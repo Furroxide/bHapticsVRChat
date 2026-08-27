@@ -32,10 +32,31 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      # A pull request that leaves VERSION alone is not proposing a release, so it should not be
+      # held to release rules - it would otherwise have to fail, since the version it carries is
+      # the one already published. Before the first release main had no VERSION file at all and
+      # nothing to compare against, which is why this only began to bite once 2.4.0 landed.
+      - name: Decide whether this pull request proposes a release
+        id: scope
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: |
+          if git diff --quiet "origin/$BASE_REF" HEAD -- VERSION; then
+            echo "VERSION is unchanged; this pull request does not propose a release."
+            echo "release_pr=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "VERSION changed; validating this pull request as a release."
+            echo "release_pr=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Validate release metadata
         shell: pwsh
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
+          RELEASE_PR: ${{ steps.scope.outputs.release_pr }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ./Tools/Validate-ReleaseMetadata.ps1 -BaseRef "origin/$env:BASE_REF"
+          $extra = @()
+          if ($env:RELEASE_PR -ne 'true') { $extra += '-AllowUnchangedVersion' }
+          ./Tools/Validate-ReleaseMetadata.ps1 -BaseRef "origin/$env:BASE_REF" @extra
