@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from prefab_layout import load, world_of  # noqa: E402
+from prefab_layout import load, root_anchor, world_of  # noqa: E402
 
 PREFABS = Path("Unity/Packages/com.furroxide.bhaptics-vrchat/Runtime/Prefabs/With Mesh")
 PADDING = 0.10
@@ -33,6 +33,7 @@ REGIONS = [
 def build_region(region_id, prefab, pattern, axes):
     transforms, receivers, go_to_transform = load(PREFABS / prefab)
     rx = re.compile(pattern)
+    root = root_anchor(transforms)
 
     # parameter -> position; then collapse to logical points by averaging.
     raw = {}
@@ -42,7 +43,7 @@ def build_region(region_id, prefab, pattern, axes):
         anchor = r["rootTransform"] if r["rootTransform"] != "0" else go_to_transform.get(r["gameObject"])
         if not anchor:
             continue
-        raw[r["parameter"]] = (world_of(anchor, transforms, r["offset"]), r["radius"])
+        raw[r["parameter"]] = (world_of(anchor, transforms, r["offset"], root), r["radius"])
 
     if not raw:
         raise SystemExit(f"{region_id}: no receivers matched {pattern!r} in {prefab}")
@@ -63,7 +64,9 @@ def build_region(region_id, prefab, pattern, axes):
 
     lo = tuple(min(p[0][i] for p in points.values()) for i in range(3))
     hi = tuple(max(p[0][i] for p in points.values()) for i in range(3))
-    extents = tuple(max(hi[i] - lo[i], 0.02) for i in range(3))
+    # Only clamp axes that are actually encoded; the fitter leaves unused axes at zero.
+    enabled = {0: "X" in axes, 1: "Y" in axes, 2: "Z" in axes}
+    extents = tuple(max(hi[i] - lo[i], 0.02) if enabled[i] else (hi[i] - lo[i]) for i in range(3))
     box = tuple(extents[i] + 2 * PADDING for i in range(3))
 
     region = {
@@ -80,11 +83,15 @@ def build_region(region_id, prefab, pattern, axes):
 
     for pid in sorted(points, key=sort_key):
         pos, radius = points[pid]
+        # An unused axis has zero extent; the fitter reports 0.5 there rather than dividing.
+        def norm(i):
+            return round((pos[i] - lo[i]) / extents[i], 6) if extents[i] > 0 else 0.5
+
         region["points"].append({
             "id": pid,
-            "u": round((pos[0] - lo[0]) / extents[0], 6),
-            "v": round((pos[1] - lo[1]) / extents[1], 6),
-            "w": round((pos[2] - lo[2]) / extents[2], 6),
+            "u": norm(0),
+            "v": norm(1),
+            "w": norm(2),
             "radius": round(radius, 6),
         })
 

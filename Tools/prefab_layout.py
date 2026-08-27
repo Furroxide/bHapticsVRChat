@@ -100,12 +100,29 @@ def load(path):
     return transforms, receivers, go_to_transform
 
 
-def world_of(anchor, transforms, local=(0., 0., 0.)):
-    """Compose a local point up the transform chain to prefab-root space."""
+def root_anchor(transforms):
+    """The transform with no parent, i.e. the prefab root."""
+    for anchor, t in transforms.items():
+        if t["father"] == "0":
+            return anchor
+    return None
+
+
+def world_of(anchor, transforms, local=(0., 0., 0.), stop_at=None):
+    """
+    Compose a local point up the transform chain into `stop_at`'s local space.
+
+    `stop_at` matters. ContactRegionFitter measures in the group's frame via
+    Transform.InverseTransformPoint, which is the frame's *local* space - the root's own
+    rotation and scale are not applied, because the emitted encoder box lives under that
+    frame and inherits them. Composing through the root instead tilts the whole point cloud:
+    the stock vest root carries a 13.7 degree X rotation, which inflated the measured height
+    by 1.29x and put this generator out of step with the fitter.
+    """
     pos = local
     node = anchor
     guard = 0
-    while node and node != "0" and node in transforms:
+    while node and node != "0" and node in transforms and node != stop_at:
         t = transforms[node]
         pos = (pos[0] * t["scale"][0], pos[1] * t["scale"][1], pos[2] * t["scale"][2])
         pos = qrot(t["rot"], pos)

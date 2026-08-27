@@ -215,3 +215,6 @@ Unity/*.slnx
 /External/bHapticsOSC/Output/
 /External/bHapticsOSC/**/[Bb]in/
 /External/bHapticsOSC/**/[Oo]bj/
+
+# Python bytecode from the manifest generator tooling.
+__pycache__/

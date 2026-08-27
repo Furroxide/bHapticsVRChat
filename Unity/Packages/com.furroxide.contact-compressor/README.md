@@ -89,6 +89,16 @@ actually computes rather than against the algebra this was derived from:
 4. **Export manifest…** writes a JSON describing every region and where each of your original points
    sits inside it. That is what the consumer reads.
 
+The manifest describes *the geometry it was exported from*. If your points have been moved or
+fitted to a particular avatar, export from that avatar rather than reusing one from elsewhere - a
+manifest describing slightly different geometry does not error, it silently drives the wrong points.
+
+Worth knowing how easily that happens. A second implementation of this fitting, written to generate
+a reference layout offline, composed transforms through the prefab root and so applied its 13.7
+degree rotation - tilting the point cloud and inflating the measured height by 1.29x, more than the
+spacing between rows. Measuring in the frame's local space, as `Transform.InverseTransformPoint`
+does, is the correct convention: that is the space the emitted box actually lives in.
+
 Your scene is untouched. Only the uploaded avatar is different.
 
 ## The manifest is the calibration

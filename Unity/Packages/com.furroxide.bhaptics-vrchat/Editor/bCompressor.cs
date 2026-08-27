@@ -152,6 +152,68 @@ namespace bHapticsOSC.VRChat
             return applied;
         }
 
+        /// <summary>
+        /// Writes the manifest describing this avatar's actual motor layout, next to the other
+        /// generated assets. Returns the path, or null if there was nothing to export.
+        ///
+        /// This runs automatically rather than being left to the user, because a manifest that
+        /// describes slightly different geometry fails silently - it drives the wrong motors
+        /// instead of erroring, which is close to impossible to diagnose from the outside. A
+        /// reference layout produced by a separate offline path was found to be off by more than
+        /// one motor row, so the safe default is to emit the layout from the same code that builds
+        /// the avatar, every time.
+        /// </summary>
+        public static string ExportManifest(bHapticsOSCIntegration editorComp)
+        {
+            if (editorComp == null || editorComp.AllUserSettings == null)
+                return null;
+
+            var fits = new List<Furroxide.ContactCompressor.Editor.FittedRegion>();
+            foreach (bUserSettings settings in editorComp.AllUserSettings.Values)
+            {
+                if (settings.CurrentPrefab == null)
+                    continue;
+
+                foreach (ContactCompressorGroup group in
+                         settings.CurrentPrefab.GetComponentsInChildren<ContactCompressorGroup>(true))
+                {
+                    var fit = Furroxide.ContactCompressor.Editor.ContactRegionFitter.Fit(group);
+                    if (fit.IsValid)
+                        fits.Add(fit);
+                    else
+                        Debug.LogWarning($"[{bHapticsOSCIntegration.SystemName}] Region '{group.regionId}' could not be "
+                                         + "fitted and is missing from the manifest: " + string.Join("; ", fit.Errors));
+                }
+            }
+
+            if (fits.Count == 0)
+                return null;
+
+            string folder = bHapticsOSCIntegration.GeneratedAssetsRoot;
+            if (!System.IO.Directory.Exists(folder))
+                System.IO.Directory.CreateDirectory(folder);
+
+            string path = System.IO.Path.Combine(folder, ManifestFileName);
+            var manifest = Furroxide.ContactCompressor.Editor.ContactCompressorManifestBuilder.Build(
+                fits, bHapticsOSCIntegration.SystemName);
+
+            System.IO.File.WriteAllText(path,
+                Furroxide.ContactCompressor.Editor.ContactCompressorManifestBuilder.ToJson(manifest));
+            AssetDatabase.Refresh();
+
+            int points = 0;
+            foreach (var region in manifest.regions) points += region.points.Count;
+            Debug.Log($"[{bHapticsOSCIntegration.SystemName}] Wrote contact compression manifest for "
+                      + $"{manifest.regions.Count} region(s) and {points} motor(s) to {path}\n"
+                      + "Copy this into the companion app's Config folder. It describes this avatar "
+                      + "specifically - a manifest from another avatar will drive the wrong motors.");
+
+            return path;
+        }
+
+        /// <summary>File name the companion app looks for.</summary>
+        public const string ManifestFileName = "contact-compressor.json";
+
         /// <summary>Strips any groups this previously added, for turning the option back off.</summary>
         public static int RemoveGroups(bHapticsOSCIntegration editorComp)
         {

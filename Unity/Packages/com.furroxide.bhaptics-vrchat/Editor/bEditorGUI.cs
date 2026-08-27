@@ -328,9 +328,18 @@ namespace bHapticsOSC.VRChat
 		{
 #if bHapticsOSC_HasContactCompressor
 			if (editorComp.ConsolidateContacts)
+			{
 				bCompressor.ApplyGroups(editorComp);
+
+				// Emitted here rather than left to the user: the layout is fitted to this avatar,
+				// so a manifest from anywhere else describes the wrong geometry and drives the
+				// wrong motors.
+				bCompressor.ExportManifest(editorComp);
+			}
 			else
+			{
 				bCompressor.RemoveGroups(editorComp);
+			}
 #endif
 		}
 
