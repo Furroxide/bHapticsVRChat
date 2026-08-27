@@ -1,7 +1,7 @@
 {
   "name": "com.furroxide.bhaptics-vrchat",
   "displayName": "bHaptics VRChatOSC",
-  "version": "2.3.1",
+  "version": "2.4.0",
   "description": "bHaptics OSC haptic device integration for VRChat avatars.",
   "unity": "2022.3",
   "author": {

@@ -6,7 +6,7 @@ Please read **[How to play VRChat with bHaptics](https://bhaptics.notion.site/Ho
 ### Files
 - [bHaptics Player](https://www.bhaptics.com/support/downloads)
 - [bHaptics VRChatOSC](https://github.com/furroxide/bHapticsVRChat/releases/latest/download/bHapticsOSC.exe)
-- [bHaptics VRChatOSC VCC Repository](https://furroxide.github.io/bHapticsVRChat/)
+- [bHaptics VRChatOSC VCC Repository](https://vpm.furroxide.dev/)
 
 ### Guides
 - [Setting Up](docs/setting-up.md)
@@ -17,7 +17,7 @@ Please read **[How to play VRChat with bHaptics](https://bhaptics.notion.site/Ho
 - **Enable OSC** in VRChat from **Action Menu → OSC → Enabled**. See VRChat's [OSC overview](https://docs.vrchat.com/docs/osc-overview).
 - **Enter** [bHaptics Avatar World](https://vrchat.com/home/world/wrld_7b1fed5e-50da-4263-b68a-81344fab1ac7), or **Update** your avatar by referring to [How to Upload an Avatar with bHaptics Devices (PC)](https://bhaptics.notion.site/How-to-Upload-an-Avatar-with-bHaptics-Devices-PC-c0479c68b8984b9d9048423b8c44f503) / [How to Upload an Avatar with bHaptics Devices (Quest)](https://bhaptics.notion.site/How-to-Upload-an-Avatar-with-bHaptics-Devices-Quest-1356d5724b8b8090bae4e89cae7eb696).
   - This project uses [VRCFury](https://vrcfury.com/) for non-destructive avatar integration. Add the VRCFury VCC repository (`https://vcc.vrcfury.com/`) first.
-  - Add the [bHaptics VRChatOSC VCC repository](https://furroxide.github.io/bHapticsVRChat/) and install `bHaptics VRChatOSC` from **Manage Project** in VCC.
+  - Add the [bHaptics VRChatOSC VCC repository](https://vpm.furroxide.dev/) and install `bHaptics VRChatOSC` from **Manage Project** in VCC.
   - In Unity, open **bHapticsOSC > Setup Assistant**. It finds a running or downloaded companion app on its own; use **Find automatically** to search again, or **Locate existing app** to pick a `bHapticsOSC.exe` yourself. **Download matching version** starts that download directly and **Latest release** opens in your browser. The assistant never downloads or starts an app automatically, and asks before closing one.
   - The official bHaptics app (`bHapticsOSC_v2.2.1.exe` and older) is a *different build*, not an older version: it cannot decode this package's compressed contact parameters, so haptics stay silent. The assistant flags it as an unsupported build and offers to close it. See [Upgrading](docs/upgrading.md).
   - In Unity, use **Create VRCFury Setup** from the bHapticsOSC Integration inspector. The setup is contained under the `bHapticsOSC VRCFury` object; after deleting that object and saving and closing its scene, the generated assets are removed.

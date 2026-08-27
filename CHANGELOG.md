@@ -1,5 +1,79 @@
 # Changelog
 
+## [2.4.0] - 2026-08-28
+
+**This is a test build.** It is the first release of the Furroxide-maintained fork, published
+so the whole chain - installing through VCC, setting an avatar up, installing the companion
+app, and feeling haptics in VRChat - can be exercised end to end for the first time. Expect
+rough edges, and please report anything that goes wrong at
+https://github.com/furroxide/bHapticsVRChat/issues
+
+### Added
+- Contact Compressor package and standalone decoder. A dense grid of contact receivers is
+  replaced at build time by six box receivers that encode where the touch happened, so the
+  companion app is told *where you were touched* rather than *which motor fired*. The vest
+  drops from 80 receivers to 6, well under VRChat's 32-contact performance budget, and the
+  contact position becomes continuous instead of one motor at a time.
+- A per-avatar contact manifest, written automatically next to the generated assets. It
+  describes that avatar's own motor layout, because a manifest from a different avatar drives
+  the wrong motors and fails silently.
+- One-press avatar setup. With an avatar selected, a single action adds the component, picks a
+  starting device set, scales every device to that avatar, and builds the VRCFury setup. A
+  confirmation dialog names the devices, the platform, and anything it had to skip, and
+  nothing happens until it is accepted. An avatar that already has devices keeps every choice
+  and position rather than being reseeded.
+- One-press companion app install, replacing the round trip through a browser, the Downloads
+  folder and a file picker. The download is verified - transport, length, PE header and
+  version resource - before the file is ever given the name the rest of the tool looks for.
+- Auto-fit for all nine devices. Previously only the vest adapted; the other eight carried
+  transforms authored for one reference avatar, so they sat at the right bone in the wrong
+  size on anyone else.
+
+### Changed
+- The Setup Assistant now answers by observation what it used to ask the user to confirm by
+  hand: whether bHaptics Player is installed and running, whether VRChat's OSC switch is on,
+  and - when VRChat has loaded an avatar carrying this package's parameters - that the whole
+  chain is working. That last one was previously only discoverable by wearing the headset and
+  feeling nothing.
+- The companion section offers one primary action chosen from the current state, rather than
+  eight equal buttons, with the rest behind Other options.
+- The window has a section for the avatar, which is the half of the journey it used to leave
+  out entirely.
+
+### Fixed
+- The Setup Assistant reported "not located" while a companion app was installed and running.
+  The process sweep matched the process name exactly, so a release named
+  `bHapticsOSC_v2.2.1.exe` was never found, and build identity was an exact match against
+  `ProductName`, so the official bHaptics build read as "not bHapticsOSC" rather than as the
+  wrong build. Detection now classifies build lineage separately from version and explains
+  that an upstream build has to be replaced, not updated.
+- A second companion app holding the VRChat OSC port is now detected and can be closed from
+  the window. While one is up, the other receives nothing.
+- Punch receivers used a component VRChat strips from avatars, so the SDK refused the upload -
+  and its Auto Fix removed the receivers while leaving behind a punch menu that drove nothing.
+- Contact compression matched only one of the four shipped device prefab sets, so enabling it
+  with the mesh-free or Quest prefabs attached a group that matched nothing and failed every
+  avatar upload.
+- The contact encoder could fabricate a touch spread from an uninitialised value, lighting
+  every motor in a region at full intensity instead of a four-motor falloff.
+- The bHapticsOSC Integration component deleted itself when added to the wrong object, which
+  read as a broken package. It now explains the problem and offers to move itself to the
+  avatar root.
+- Creating the VRCFury setup is now a single undoable operation that rolls the avatar back if
+  it fails, instead of leaving it half-built.
+- The release pipeline rejected the very manifest it validates, and never published the
+  Contact Compressor package that manifest depends on.
+
+### Upgrade notes
+- There is no previous release to upgrade from; this is the first one.
+- Install through VCC from https://vpm.furroxide.dev/index.json, or import the
+  `.unitypackage` if you are not using VCC. Do not use both formats in one project.
+- The companion app is a separate Windows program. Let the Setup Assistant install it, or
+  download `bHapticsOSC.exe` from this release.
+- If you already run the official bHaptics `bHapticsOSC_v2.2.1.exe`, close it and replace it
+  with this build. It is a different program, not an older version of this one, and it cannot
+  decode the compressed contact parameters this package generates.
+
 ## [2.3.1] - 2026-07-18
 
 The first public release of the Furroxide-maintained fork adds a non-destructive
