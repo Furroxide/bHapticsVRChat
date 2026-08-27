@@ -56,6 +56,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-vpm-listing-
 
+      # The listing builder FETCHES --current-listing-url, to skip packages it has already
+      # published. A 404 is handled - it logs, returns null, and the listing is rebuilt from every
+      # release, which is what the __rebuild-all-releases__ name asks for - but a DNS failure throws
+      # out of GetAuthenticatedString and kills the target. So this points at github.io, which
+      # always resolves, rather than the custom domain, which would break every listing build
+      # whenever its DNS is missing or lapses. The user-facing address is source.json's `url`.
       - name: Build repository listing
         shell: bash
         run: >-
@@ -63,7 +69,7 @@ jobs:
           --root ci
           --list-publish-directory "$GITHUB_WORKSPACE/Website"
           --current-package-name com.furroxide.bhaptics-vrchat
-          --current-listing-url "https://vpm.furroxide.dev/__rebuild-all-releases__.json"
+          --current-listing-url "https://furroxide.github.io/bHapticsVRChat/__rebuild-all-releases__.json"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
