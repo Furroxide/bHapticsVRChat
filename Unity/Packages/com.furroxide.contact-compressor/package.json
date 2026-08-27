@@ -1,7 +1,7 @@
 {
   "name": "com.furroxide.contact-compressor",
   "displayName": "Contact Compressor",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Collapses a dense grid of VRChat Contact Receivers into a handful of box receivers that encode the contact position as floats. Author one receiver per point; the build emits six. Device agnostic - decode the position in whatever consumes your OSC.",
   "unity": "2022.3",
   "author": {

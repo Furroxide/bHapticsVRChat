@@ -1,5 +1,6 @@
 #if VRC_SDK_VRCSDK3 && bHapticsOSC_HasVrcFury
 using System.Collections;
+using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -122,6 +123,8 @@ namespace bHapticsOSC.VRChat.Tests
         [TestCase((int)bCompanionStatus.Outdated, true)]
         [TestCase((int)bCompanionStatus.ReadyStopped, false)]
         [TestCase((int)bCompanionStatus.ReadyRunning, false)]
+        [TestCase((int)bCompanionStatus.ForeignBuild, true)]
+        [TestCase((int)bCompanionStatus.RunningUninspectable, true)]
         public void ShouldWarnCompanionStatus_OnlyWarnsForActionableFailures(
             int statusValue,
             bool expected)
@@ -129,6 +132,30 @@ namespace bHapticsOSC.VRChat.Tests
             Assert.That(
                 bAvatarUploadDiagnostics.ShouldWarnCompanionStatus((bCompanionStatus)statusValue),
                 Is.EqualTo(expected));
+        }
+
+        /// <summary>
+        /// The table above is only meaningful while it names every status. Adding one to the enum
+        /// without deciding whether it warrants a pre-upload warning would otherwise pass silently
+        /// - which is how ForeignBuild, the whole point of the upstream-build detection, could have
+        /// stopped warning without a single test going red.
+        /// </summary>
+        [Test]
+        public void ShouldWarnCompanionStatus_CoversEveryStatus()
+        {
+            var covered = new HashSet<bCompanionStatus>();
+            foreach (TestCaseAttribute testCase in typeof(bAvatarUploadDiagnosticsTests)
+                         .GetMethod(nameof(ShouldWarnCompanionStatus_OnlyWarnsForActionableFailures))
+                         .GetCustomAttributes(typeof(TestCaseAttribute), false))
+            {
+                covered.Add((bCompanionStatus)(int)testCase.Arguments[0]);
+            }
+
+            foreach (bCompanionStatus status in System.Enum.GetValues(typeof(bCompanionStatus)))
+            {
+                Assert.That(covered, Does.Contain(status),
+                    $"{status} has no case in ShouldWarnCompanionStatus_OnlyWarnsForActionableFailures.");
+            }
         }
 
         [TestCase(false, true, (int)bAvatarUploadTargetStatus.Configured, true)]

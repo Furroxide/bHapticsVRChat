@@ -104,8 +104,9 @@ namespace Furroxide.ContactCompressor
             };
 
             int active = 0;
+            int measured = 0;
             float footprintMin = float.MaxValue;
-            float footprintMax = 0f;
+            float footprintMax = float.MinValue;
             var position = new float[3] { 0.5f, 0.5f, 0.5f };
 
             for (int axis = 0; axis < 3; axis++)
@@ -119,13 +120,30 @@ namespace Furroxide.ContactCompressor
 
                 active++;
 
+                float extent = boxExtents[axis];
+                float footprint = ContactEncoderMath.DecodeFootprint(pp, pn, extent);
+
+                // A footprint is 2r, so it cannot be negative for any physically consistent pair -
+                // sweeping every shipped region across sender sizes and positions produces none.
+                // What does produce one is a pair read from two different frames, where one face
+                // still holds its previous value. Such an axis has no usable footprint AND no
+                // usable position, so it is dropped from both rather than clamped: a clamped zero
+                // would become the minimum and turn the healthy axes' real footprint into a
+                // fabricated spread, which is the whole failure being guarded against. Written as
+                // >= 0 rather than < 0 so NaN, which fails every ordered comparison below, is
+                // rejected here too.
+                if (!(footprint >= 0f))
+                {
+                    result.Confidence *= 0.6f;
+                    continue;
+                }
+
                 if (ContactEncoderMath.IsSaturated(pp, pn))
                 {
                     result.SaturatedAxes |= flag;
                     result.Confidence *= 0.5f;
                 }
 
-                float extent = boxExtents[axis];
                 float tBox = ContactEncoderMath.DecodeAxis(pp, pn);
                 float u = ContactEncoderMath.BoxToRegion(tBox, extent, regionExtents[axis]);
 
@@ -136,13 +154,22 @@ namespace Furroxide.ContactCompressor
 
                 position[axis] = ContactEncoderMath.Clamp01(u);
 
-                float footprint = ContactEncoderMath.DecodeFootprint(pp, pn, extent);
+                measured++;
                 if (footprint < footprintMin) footprintMin = footprint;
                 if (footprint > footprintMax) footprintMax = footprint;
             }
 
             if (active == 0)
                 return default;
+
+            // Every active axis was inconsistent, so there is a contact but nothing trustworthy is
+            // known about it. Report it at the region centre with the confidence already accrued
+            // rather than deriving a radius and spread from the unset sentinels.
+            if (measured == 0)
+            {
+                result.InContact = true;
+                return result;
+            }
 
             result.InContact = true;
             result.Position = new EncodedPoint(position[0], position[1], position[2]);

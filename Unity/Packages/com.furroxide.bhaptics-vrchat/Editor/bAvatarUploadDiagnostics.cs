@@ -45,7 +45,10 @@ namespace bHapticsOSC.VRChat
             try
             {
                 bCompanionStatusResult result = bCompanionStatusDetector.Detect(true);
-                if (ShouldWarnCompanionStatus(result.Status))
+
+                // A second, unsupported companion holding the OSC port is worth flagging even
+                // when the supported build itself is healthy.
+                if (ShouldWarnCompanionStatus(result.Status) || result.HasConflictingProcess)
                     Debug.LogWarning(BuildCompanionWarning(result), avatarGameObject);
             }
             catch (Exception exception)
@@ -81,6 +84,8 @@ namespace bHapticsOSC.VRChat
                 case bCompanionStatus.InvalidProduct:
                 case bCompanionStatus.UnknownVersion:
                 case bCompanionStatus.Outdated:
+                case bCompanionStatus.ForeignBuild:
+                case bCompanionStatus.RunningUninspectable:
                     return true;
                 default:
                     return false;
@@ -102,6 +107,11 @@ namespace bHapticsOSC.VRChat
             string message = string.IsNullOrWhiteSpace(details)
                 ? summary
                 : $"{summary}\n{details}";
+
+            if (result.HasConflictingProcess)
+            {
+                message += $"\n'{result.ConflictingProcessName}' is also running and competes for the VRChat OSC port.";
+            }
 
             return $"[bHapticsOSC] {message}\n" +
                    "Open bHapticsOSC > Setup Assistant to resolve this.\n" +

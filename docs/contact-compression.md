@@ -55,9 +55,16 @@ coordinates and the error was 0.23, so touches would have landed a row off. A pa
 the two paths caught it; both now agree exactly.
 
 [`Decoder/manifests/bhaptics-default.json`](../Decoder/manifests/bhaptics-default.json) describes
-the untouched prefabs and is used as a test fixture. It is correct, and it is fine to use if you
-have not moved or resized anything — but if you have adjusted device placement, or auto-fitted a
-device to your avatar, export from that avatar instead.
+the untouched **With Mesh** prefabs and is used as a test fixture. It is fine to use if you built
+from those prefabs and have not moved or resized anything.
+
+It does **not** describe the **Without Mesh** prefabs, which are also compressed but are not the
+same geometry: their head carries six motors where the With Mesh head carries four. Loading the
+default manifest against a Without Mesh avatar is exactly the silent failure described above —
+`Head/4` and `Head/5` would never fire and a touch near one end of the head would drive a motor in
+the middle of it. Export from the avatar instead, as the setup already does for you.
+
+The same applies if you have adjusted device placement or auto-fitted a device to your avatar.
 
 The app loads a single manifest, so switching between avatars whose devices are placed differently
 needs the matching file in `Config`. Per-avatar manifests keyed on avatar id are the obvious next

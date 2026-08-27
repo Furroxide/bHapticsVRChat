@@ -38,32 +38,61 @@ namespace bHapticsOSC.VRChat
         //[SerializeField]
         //public bool AudioLink = false;
 
-        public void Validate()
-	    {
+        /// <summary>
+        /// Why this component cannot be used where it currently sits.
+        /// </summary>
+        public enum bSetupProblem
+        {
+            Ok,
+
+            /// <summary>Not on an avatar root - there is no VRC Avatar Descriptor here.</summary>
+            NoAvatarDescriptor,
+
+            /// <summary>The avatar has no Animator, so no bones to attach devices to.</summary>
+            NoAnimator,
+
+            /// <summary>Another bHapticsOSC Integration already exists under this object.</summary>
+            DuplicateComponent,
+        }
+
+        /// <summary>
+        /// Caches the avatar references and reports what is wrong, without changing anything.
+        ///
+        /// This deliberately does not destroy the component or log. It used to do both, from
+        /// inside OnInspectorGUI: dropping the component on the wrong object made it vanish with
+        /// only a console line to explain, which reads as a broken package rather than as a
+        /// misplaced component. The inspector now says what is wrong and offers to fix it.
+        /// </summary>
+        public bSetupProblem TryValidate()
+        {
             avatar = gameObject.GetComponent<VRCAvatarDescriptor>();
             if (avatar == null)
-            {
-                Debug.LogError("No VRCAvatarDescriptor Detected!");
-                DestroyImmediate(this);
-                return;
-            }
-            
+                return bSetupProblem.NoAvatarDescriptor;
+
             if (gameObject.GetComponentsInChildren<bHapticsOSCIntegration>(true).Length > 1)
-            {
-                Debug.LogError("Only 1 bHapticsOSC Integration component can be used at a time!");
-                DestroyImmediate(this);
-                return;
-            }
+                return bSetupProblem.DuplicateComponent;
 
             avatarAnimator = gameObject.GetComponent<Animator>();
             if (avatarAnimator == null)
-            {
-                Debug.LogError("Avatar must have an Animator!");
-                DestroyImmediate(this);
-                return;
-            }
+                return bSetupProblem.NoAnimator;
 
             EnsureUniqueAssetKey();
+            return bSetupProblem.Ok;
+        }
+
+        /// <summary>Caches the avatar references, ignoring any problem. Kept for existing callers.</summary>
+        public void Validate() => TryValidate();
+
+        /// <summary>The nearest ancestor that could host this component, or null if there is none.</summary>
+        public GameObject FindAvatarRoot()
+        {
+            for (Transform current = transform.parent; current != null; current = current.parent)
+            {
+                if (current.GetComponent<VRCAvatarDescriptor>() != null)
+                    return current.gameObject;
+            }
+
+            return null;
         }
 
         public void EnsureUniqueAssetKey()

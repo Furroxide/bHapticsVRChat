@@ -171,6 +171,7 @@ function Assert-VpmManifest([object]$Manifest, [string]$Version, [string]$Path) 
     Assert-ExactJsonMap $Manifest.vpmDependencies @{
         'com.vrchat.avatars' = '3.10.x'
         'com.vrcfury.vrcfury' = '>=1.1341.0 <2.0.0'
+        'com.furroxide.contact-compressor' = '>=0.1.0 <1.0.0'
     } "VPM dependencies in $Path"
 
     Assert-ExactJsonMap $Manifest.legacyFolders @{
@@ -190,6 +191,153 @@ function Assert-VpmManifest([object]$Manifest, [string]$Version, [string]$Path) 
     if ($legacyPackages.Count -ne 1 -or ([string]$legacyPackages[0]) -cne 'bHapticsOSC.VRChat') {
         Fail "VPM legacyPackages in $Path must contain only 'bHapticsOSC.VRChat'."
     }
+}
+
+function Assert-ContactCompressorManifest([object]$Manifest, [string]$Path) {
+    $expectedName = 'com.furroxide.contact-compressor'
+    if (([string]$Manifest.name) -cne $expectedName) {
+        Fail "VPM package name in $Path must be '$expectedName', got '$($Manifest.name)'."
+    }
+
+    if (([string]$Manifest.displayName) -cne 'Contact Compressor') {
+        Fail "VPM displayName in $Path must be 'Contact Compressor', got '$($Manifest.displayName)'."
+    }
+
+    Assert-StrictVersion ([string]$Manifest.version) "Contact Compressor package version in $Path"
+
+    if (([string]$Manifest.unity) -cne '2022.3') {
+        Fail "VPM unity version in $Path must be '2022.3', got '$($Manifest.unity)'."
+    }
+
+    if (([string]$Manifest.license) -cne 'GPL-3.0-only') {
+        Fail "VPM license in $Path must be 'GPL-3.0-only', got '$($Manifest.license)'."
+    }
+
+    Assert-ExactJsonMap $Manifest.author @{
+        name = 'Furroxide'
+        email = '221987073+furroxide@users.noreply.github.com'
+        url = 'https://github.com/furroxide'
+    } "VPM author in $Path"
+
+    Assert-ExactJsonMap $Manifest.vpmDependencies @{
+        'com.vrchat.avatars' = '3.10.x'
+    } "VPM dependencies in $Path"
+}
+
+<#
+.SYNOPSIS
+    Requires the Contact Compressor version to move whenever its contents do.
+
+.DESCRIPTION
+    The compressor's version is independent of VERSION, so nothing else makes it change. The VPM
+    listing keys packages by (id, version) and keeps the first entry it saw, so republishing
+    different bytes under an unchanged version leaves every VCC user on the old archive with no
+    error anywhere - the release succeeds and the fix simply never ships. Skipped when there is no
+    usable baseline to compare against, matching how the VERSION baseline behaves.
+#>
+function Assert-ContactCompressorVersionBumped(
+    [string]$RequestedBaseRef,
+    [string]$CurrentVersion,
+    [string]$PackageRelativePath) {
+
+    if ([string]::IsNullOrWhiteSpace($RequestedBaseRef) -or $RequestedBaseRef.Trim() -match '^0+$') {
+        return
+    }
+
+    $baseRef = $RequestedBaseRef.Trim()
+    $baselineManifest = Get-GitOutput @('show', "${baseRef}:$PackageRelativePath/package.json") -AllowFailure
+    if ([string]::IsNullOrWhiteSpace($baselineManifest)) {
+        Write-Warning "Contact Compressor manifest is unavailable at $baseRef; skipping its version-increase check."
+        return
+    }
+
+    $changed = Get-GitOutput @('diff', '--name-only', $baseRef, 'HEAD', '--', $PackageRelativePath) -AllowFailure
+    if ([string]::IsNullOrWhiteSpace($changed)) {
+        return
+    }
+
+    try {
+        $baselineVersion = [string](($baselineManifest | ConvertFrom-Json).version)
+    } catch {
+        Write-Warning "Contact Compressor manifest at $baseRef could not be parsed; skipping its version-increase check."
+        return
+    }
+
+    if ([string]::IsNullOrWhiteSpace($baselineVersion)) {
+        return
+    }
+
+    Assert-StrictVersion $baselineVersion "Contact Compressor version at $baseRef"
+    if ((Compare-StrictVersion $CurrentVersion $baselineVersion) -le 0) {
+        $files = ($changed -split "`n" | Select-Object -First 5) -join ', '
+        Fail ("$PackageRelativePath changed since $baseRef but its version is still $CurrentVersion " +
+              "(was $baselineVersion). Bump it, or the VPM listing keeps serving the old archive. " +
+              "Changed: $files")
+    }
+}
+
+<#
+.SYNOPSIS
+    Checks that every first-party VPM dependency is a package this pipeline actually publishes.
+
+.DESCRIPTION
+    A dependency on com.furroxide.* that no release ships is unresolvable in VCC: the package
+    installs and then fails to resolve, which looks like a broken listing rather than a missing
+    build step. This is the check that was absent when the Contact Compressor dependency was added
+    without the pipeline learning to publish it.
+
+    The set of published packages is passed in by the caller rather than read out of the workflow
+    files, so this catches a dependency on a package that does not exist - not a workflow that
+    stopped building one that does. Removing a build step still fails, but later, at the publish
+    job's asset-count check.
+#>
+function Assert-FirstPartyDependenciesArePublished(
+    [object]$Manifest,
+    [hashtable]$PublishedVersionsByName,
+    [string]$Path) {
+
+    if ($null -eq $Manifest.vpmDependencies) {
+        return
+    }
+
+    foreach ($dependency in $Manifest.vpmDependencies.PSObject.Properties) {
+        $name = [string]$dependency.Name
+        if (-not $name.StartsWith('com.furroxide.', [StringComparison]::Ordinal)) {
+            continue
+        }
+
+        if (-not $PublishedVersionsByName.ContainsKey($name)) {
+            Fail ("$Path depends on '$name', which this repository does not publish. Add it to the " +
+                  'release pipeline or drop the dependency; VCC cannot resolve it as things stand.')
+        }
+
+        $range = [string]$dependency.Value
+        $published = [string]$PublishedVersionsByName[$name]
+        if (-not (Test-VersionSatisfiesRange $published $range)) {
+            Fail "$Path requires '$name' $range, but the version this repository publishes is $published."
+        }
+    }
+}
+
+<#
+.SYNOPSIS
+    Evaluates the ">=x.y.z <a.b.c" ranges this repository uses for its own packages.
+
+.DESCRIPTION
+    Deliberately narrow: it understands the exact shape written in these manifests and refuses
+    anything else, rather than half-implementing the VPM range grammar and silently passing a
+    range it got wrong.
+#>
+function Test-VersionSatisfiesRange([string]$Version, [string]$Range) {
+    $match = [regex]::Match(
+        $Range.Trim(),
+        '^>=\s*(?<min>\d+\.\d+\.\d+)\s+<\s*(?<max>\d+\.\d+\.\d+)$')
+    if (-not $match.Success) {
+        Fail "Unsupported first-party dependency range '$Range'; expected '>=X.Y.Z <A.B.C'."
+    }
+
+    return (Compare-StrictVersion $Version $match.Groups['min'].Value) -ge 0 -and
+           (Compare-StrictVersion $Version $match.Groups['max'].Value) -lt 0
 }
 
 function Get-LatestTagVersion([string]$ExcludedTag) {
@@ -355,6 +503,18 @@ try {
 
     Assert-VpmManifest $vpmManifest $rootVersion $vpmManifestPath
 
+    $compressorManifestPath = Join-Path $RepositoryRoot 'Unity\Packages\com.furroxide.contact-compressor\package.json'
+    $compressorManifest = Read-PackageJson $compressorManifestPath
+    Assert-ContactCompressorManifest $compressorManifest $compressorManifestPath
+    Assert-ContactCompressorVersionBumped `
+        $BaseRef `
+        ([string]$compressorManifest.version) `
+        'Unity/Packages/com.furroxide.contact-compressor'
+
+    Assert-FirstPartyDependenciesArePublished $vpmManifest @{
+        'com.furroxide.contact-compressor' = [string]$compressorManifest.version
+    } $vpmManifestPath
+
     $legacyRootGuid = 'aa20f348b2d0ed2438d3fc45ceb17fe6'
     if ($vpmRuntimeGuid -ceq $legacyRootGuid) {
         Fail "VPM Runtime GUID must differ from the preserved legacy VRChat root GUID ($legacyRootGuid)."
@@ -436,6 +596,7 @@ try {
         Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "version=$rootVersion"
         Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "tag=$tag"
         Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "vpm_archive=com.furroxide.bhaptics-vrchat-$rootVersion.zip"
+        Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "compressor_archive=com.furroxide.contact-compressor-$($compressorManifest.version).zip"
     }
 
     Write-Host "Release metadata is valid for $tag."

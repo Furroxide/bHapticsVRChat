@@ -33,9 +33,17 @@ namespace bHapticsOSC.VRChat
         /// Collapses the self and others receivers at one motor into a single manifest point.
         /// Without this a consumer spreading a contact over its four nearest points would spend two
         /// of them on the same motor.
+        ///
+        /// Both shipped namings normalise to the same "Device/node" id: the "With Mesh" prefabs use
+        /// bOSC/v2/VestFront/7/others, the "Without Mesh" ones bOSC_v1_VestFront_7. That form is
+        /// not cosmetic - the companion app splits each point id at its last slash to find the
+        /// device and motor number, so an id without one is skipped and that motor never fires.
+        /// (.NET allows a group name to be reused across alternation branches; whichever branch
+        /// matched supplies the capture.)
         /// </summary>
-        private const string PointIdPattern = "^bOSC/v2/(.+)/(?:self|others)$";
-        private const string PointIdReplacement = "$1";
+        internal const string PointIdPattern =
+            @"^(?:bOSC/v2/(?<dev>[^/]+)/(?<node>\d+)/(?:self|others)|bOSC_v1_(?<dev>[A-Za-z]+)_(?<node>\d+))$";
+        internal const string PointIdReplacement = "${dev}/${node}";
 
         private struct RegionPlan
         {
@@ -55,6 +63,22 @@ namespace bHapticsOSC.VRChat
         /// Source patterns deliberately match only the per-motor node parameters, which keeps the
         /// punch receivers (generated separately, and velocity-triggered rather than positional)
         /// out of the fit.
+        ///
+        /// Each pattern covers both desktop namings - "With Mesh" prefabs use
+        /// bOSC/v2/Device/n/self|others, "Without Mesh" ones bOSC_v1_Device_n - because both carry
+        /// the same dense motor grid and both are reachable from the Show Mesh toggle.
+        ///
+        /// The Quest/mobile prefabs (bOSC/v2m/...) are deliberately absent, but only the head and
+        /// arms are a closed case: they carry two receivers each against the six an XYZ region
+        /// emits, so compressing them would cost more contacts than it saves. The mobile vest is
+        /// not - it carries ten, which six would genuinely reduce. It is left out because the
+        /// reference layout, the parity tests and the shipped manifest are all built from the
+        /// desktop prefabs, so extending compression to Quest is a change to what Quest avatars
+        /// upload rather than a bug fix. The mobile arms are also parameterised as HandL/HandR
+        /// rather than ForearmL/R, so they would need their own plan regardless.
+        ///
+        /// A device whose pattern matches nothing is skipped outright rather than given a group
+        /// that cannot fit.
         /// </summary>
         private static readonly RegionPlan[] Plans =
         {
@@ -64,28 +88,28 @@ namespace bHapticsOSC.VRChat
                 RegionId = "Torso",
                 Axes = EncoderAxes.XYZ,
                 // Front and back in one region: the Z coordinate tells them apart.
-                SourcePattern = @"^bOSC/v2/(?:VestFront|VestBack)/\d+/(?:self|others)$"
+                SourcePattern = @"^(?:bOSC/v2/(?:VestFront|VestBack)/\d+/(?:self|others)|bOSC_v1_(?:VestFront|VestBack)_\d+)$"
             },
             new RegionPlan
             {
                 Device = bDeviceType.HEAD,
                 RegionId = "Head",
                 Axes = EncoderAxes.X,
-                SourcePattern = @"^bOSC/v2/Head/\d+/(?:self|others)$"
+                SourcePattern = @"^(?:bOSC/v2/Head/\d+/(?:self|others)|bOSC_v1_Head_\d+)$"
             },
             new RegionPlan
             {
                 Device = bDeviceType.ARM_LEFT,
                 RegionId = "ForearmL",
                 Axes = EncoderAxes.XYZ,
-                SourcePattern = @"^bOSC/v2/ForearmL/\d+/(?:self|others)$"
+                SourcePattern = @"^(?:bOSC/v2/ForearmL/\d+/(?:self|others)|bOSC_v1_ForearmL_\d+)$"
             },
             new RegionPlan
             {
                 Device = bDeviceType.ARM_RIGHT,
                 RegionId = "ForearmR",
                 Axes = EncoderAxes.XYZ,
-                SourcePattern = @"^bOSC/v2/ForearmR/\d+/(?:self|others)$"
+                SourcePattern = @"^(?:bOSC/v2/ForearmR/\d+/(?:self|others)|bOSC_v1_ForearmR_\d+)$"
             }
         };
 
@@ -98,6 +122,39 @@ namespace bHapticsOSC.VRChat
                     yield return plan.Device;
             }
         }
+
+        /// <summary>One plan's identity, so tests can check the patterns against the real prefabs.</summary>
+        internal readonly struct PlanInfo
+        {
+            internal PlanInfo(bDeviceType device, string regionId, string sourcePattern)
+            {
+                Device = device;
+                RegionId = regionId;
+                SourcePattern = sourcePattern;
+            }
+
+            internal bDeviceType Device { get; }
+            internal string RegionId { get; }
+            internal string SourcePattern { get; }
+        }
+
+        /// <summary>
+        /// The plans, for tests. A source pattern that stops matching the shipped prefabs is
+        /// invisible at authoring time and only surfaces as a refused avatar upload, so it needs
+        /// checking against the prefabs themselves rather than against a restatement of itself.
+        /// </summary>
+        internal static IEnumerable<PlanInfo> PlansForTests
+        {
+            get
+            {
+                foreach (RegionPlan plan in Plans)
+                    yield return new PlanInfo(plan.Device, plan.RegionId, plan.SourcePattern);
+            }
+        }
+
+        /// <summary>How many of a prefab's receivers a plan takes over. Exposed for tests.</summary>
+        internal static int CountMatchingReceiversForTests(GameObject host, string sourcePattern)
+            => CountMatchingReceivers(host, sourcePattern);
 
         /// <summary>
         /// Adds a compression group to every selected device that has a plan. Returns how many were
@@ -124,6 +181,19 @@ namespace bHapticsOSC.VRChat
                 GameObject host = settings.CurrentPrefab;
 
                 ContactCompressorGroup group = host.GetComponent<ContactCompressorGroup>();
+
+                // A group whose pattern matches nothing fails the fit, and the build hook rejects
+                // the whole avatar on the first invalid group - so one mobile device would block an
+                // upload that every other region was ready for. Skip the device instead, and clear
+                // any group left over from a prefab variant that used to match.
+                if (CountMatchingReceivers(host, plan.SourcePattern) == 0)
+                {
+                    if (group != null)
+                        Undo.DestroyObjectImmediate(group);
+
+                    continue;
+                }
+
                 if (group == null)
                     group = Undo.AddComponent<ContactCompressorGroup>(host);
                 else
@@ -179,10 +249,17 @@ namespace bHapticsOSC.VRChat
                 {
                     var fit = Furroxide.ContactCompressor.Editor.ContactRegionFitter.Fit(group);
                     if (fit.IsValid)
+                    {
                         fits.Add(fit);
-                    else
-                        Debug.LogWarning($"[{bHapticsOSCIntegration.SystemName}] Region '{group.regionId}' could not be "
-                                         + "fitted and is missing from the manifest: " + string.Join("; ", fit.Errors));
+                        continue;
+                    }
+
+                    // Not a partial success. The build hook refuses the whole avatar on the first
+                    // group that will not fit, so a manifest written around the failure would only
+                    // let the setup claim success for an upload that is already doomed.
+                    Debug.LogError($"[{bHapticsOSCIntegration.SystemName}] Region '{group.regionId}' could not be "
+                                   + "fitted, so no manifest was written: " + string.Join("; ", fit.Errors), group);
+                    return null;
                 }
             }
 
@@ -213,6 +290,41 @@ namespace bHapticsOSC.VRChat
 
         /// <summary>File name the companion app looks for.</summary>
         public const string ManifestFileName = "contact-compressor.json";
+
+        /// <summary>
+        /// Removes only the groups <see cref="ApplyGroups"/> puts on the planned device prefab
+        /// roots, leaving any a user authored themselves elsewhere in the hierarchy alone. Used to
+        /// back out of a failed setup, where destroying the user's own work would be a worse
+        /// outcome than the failure.
+        /// </summary>
+        public static int RemoveGeneratedGroups(bHapticsOSCIntegration editorComp)
+        {
+            if (editorComp == null || editorComp.AllUserSettings == null)
+                return 0;
+
+            int removed = 0;
+
+            foreach (RegionPlan plan in Plans)
+            {
+                if (!bDevice.AllTemplates.TryGetValue(plan.Device, out bDeviceTemplate template))
+                    continue;
+
+                if (!editorComp.AllUserSettings.TryGetValue(template, out bUserSettings settings))
+                    continue;
+
+                if (settings.CurrentPrefab == null)
+                    continue;
+
+                ContactCompressorGroup group = settings.CurrentPrefab.GetComponent<ContactCompressorGroup>();
+                if (group == null)
+                    continue;
+
+                Undo.DestroyObjectImmediate(group);
+                removed++;
+            }
+
+            return removed;
+        }
 
         /// <summary>Strips any groups this previously added, for turning the option back off.</summary>
         public static int RemoveGroups(bHapticsOSCIntegration editorComp)
@@ -260,19 +372,40 @@ namespace bHapticsOSC.VRChat
                 if (settings.CurrentPrefab == null)
                     continue;
 
-                var matcher = new System.Text.RegularExpressions.Regex(plan.SourcePattern);
-                foreach (VRC.Dynamics.ContactReceiver receiver in settings.CurrentPrefab.GetComponentsInChildren<VRC.Dynamics.ContactReceiver>(true))
-                {
-                    if (receiver != null
-                        && !string.IsNullOrWhiteSpace(receiver.parameter)
-                        && matcher.IsMatch(receiver.parameter))
-                    {
-                        before++;
-                    }
-                }
+                int matched = CountMatchingReceivers(settings.CurrentPrefab, plan.SourcePattern);
+                if (matched == 0)
+                    continue;
 
+                before += matched;
                 after += ContactEncoderSolver.ReceiverCount(plan.Axes);
             }
+        }
+
+        /// <summary>
+        /// How many of a prefab's receivers a plan would actually take over. Zero means the device
+        /// uses a naming this plan does not cover - the mobile prefabs, in practice - and must be
+        /// left alone rather than given a group that cannot fit.
+        /// </summary>
+        private static int CountMatchingReceivers(GameObject host, string sourcePattern)
+        {
+            if (host == null || string.IsNullOrWhiteSpace(sourcePattern))
+                return 0;
+
+            var matcher = new System.Text.RegularExpressions.Regex(sourcePattern);
+            int matched = 0;
+
+            foreach (VRC.Dynamics.ContactReceiver receiver in
+                     host.GetComponentsInChildren<VRC.Dynamics.ContactReceiver>(true))
+            {
+                if (receiver != null
+                    && !string.IsNullOrWhiteSpace(receiver.parameter)
+                    && matcher.IsMatch(receiver.parameter))
+                {
+                    matched++;
+                }
+            }
+
+            return matched;
         }
     }
 }

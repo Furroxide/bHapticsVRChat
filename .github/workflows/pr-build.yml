@@ -36,7 +36,7 @@ jobs:
       - name: Reject committed binary artifacts
         shell: bash
         run: |
-          tracked="$(git ls-files '*.exe' '*.unitypackage' '*.dll' '*.pdb' 'com.furroxide.bhaptics-vrchat-*.zip')"
+          tracked="$(git ls-files '*.exe' '*.unitypackage' '*.dll' '*.pdb' 'com.furroxide.bhaptics-vrchat-*.zip' 'com.furroxide.contact-compressor-*.zip')"
           if [ -n "$tracked" ]; then
             echo "Binary build artifacts must not be tracked:"
             echo "$tracked"
@@ -142,6 +142,7 @@ jobs:
               { label: 'bHapticsOSC.exe', find: item => item.name === 'bHapticsOSC.exe' },
               { label: 'bHapticsOSC-VRChat.unitypackage', find: item => item.name === 'bHapticsOSC-VRChat.unitypackage' },
               { label: 'VPM package ZIP', find: item => /^com\.furroxide\.bhaptics-vrchat-\d+\.\d+\.\d+\.zip$/.test(item.name) },
+              { label: 'Contact Compressor VPM ZIP', find: item => /^com\.furroxide\.contact-compressor-\d+\.\d+\.\d+\.zip$/.test(item.name) },
               { label: 'VPM package.json', find: item => item.name === 'package.json' },
             ];
 
@@ -269,11 +270,29 @@ jobs:
         run: |
           ./Tools/Build-VpmPackage.ps1
 
+      # Built here as well as in the release so a break in the dependency package shows up on the
+      # pull request rather than at publish time.
+      - name: Build deterministic Contact Compressor VPM archive
+        id: build_compressor
+        shell: pwsh
+        run: |
+          ./Tools/Build-VpmPackage.ps1 `
+            -PackagePath Unity/Packages/com.furroxide.contact-compressor `
+            -ExpectedPackageName com.furroxide.contact-compressor
+
       - name: Upload VPM archive artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.build_vpm.outputs.archive_name }}
           path: ${{ steps.build_vpm.outputs.archive_path }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Contact Compressor VPM archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build_compressor.outputs.archive_name }}
+          path: ${{ steps.build_compressor.outputs.archive_path }}
           if-no-files-found: error
           retention-days: 14
 

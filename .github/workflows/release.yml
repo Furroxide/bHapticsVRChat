@@ -21,6 +21,7 @@ jobs:
       version: ${{ steps.validate.outputs.version }}
       tag: ${{ steps.validate.outputs.tag }}
       vpm_archive: ${{ steps.validate.outputs.vpm_archive }}
+      compressor_archive: ${{ steps.validate.outputs.compressor_archive }}
 
     steps:
       - name: Check out repository
@@ -183,11 +184,31 @@ jobs:
         run: |
           ./Tools/Build-VpmPackage.ps1
 
+      # The avatar package declares this as a vpmDependency, so the listing has to carry it or
+      # VCC installs a package it cannot resolve. The listing builder reads every .zip asset in
+      # every release and takes each package's identity from the manifest inside it, so a second
+      # archive is all this needs.
+      - name: Build deterministic Contact Compressor VPM archive
+        id: build_compressor
+        shell: pwsh
+        run: |
+          ./Tools/Build-VpmPackage.ps1 `
+            -PackagePath Unity/Packages/com.furroxide.contact-compressor `
+            -ExpectedPackageName com.furroxide.contact-compressor
+
       - name: Upload VPM archive artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.build_vpm.outputs.archive_name }}
           path: ${{ steps.build_vpm.outputs.archive_path }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload Contact Compressor VPM archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build_compressor.outputs.archive_name }}
+          path: ${{ steps.build_compressor.outputs.archive_path }}
           if-no-files-found: error
           retention-days: 7
 
@@ -224,12 +245,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.validate.outputs.tag }}
           VPM_ARCHIVE: ${{ needs.validate.outputs.vpm_archive }}
+          COMPRESSOR_ARCHIVE: ${{ needs.validate.outputs.compressor_archive }}
         run: |
           set -euo pipefail
 
           test -f release/bHapticsOSC.exe
           test -f release/bHapticsOSC-VRChat.unitypackage
           test -f "release/$VPM_ARCHIVE"
+          test -f "release/$COMPRESSOR_ARCHIVE"
           test -f release/package.json
           test -f release/release-notes.md
 
@@ -263,14 +286,15 @@ jobs:
             release/bHapticsOSC.exe \
             release/bHapticsOSC-VRChat.unitypackage \
             "release/$VPM_ARCHIVE" \
+            "release/$COMPRESSOR_ARCHIVE" \
             release/package.json \
             --repo "$GITHUB_REPOSITORY" \
             --clobber
 
           published_assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
           published_asset_count="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')"
-          if [ "$published_asset_count" -ne 4 ]; then
-            echo "Draft release $TAG contains $published_asset_count assets; expected exactly 4."
+          if [ "$published_asset_count" -ne 5 ]; then
+            echo "Draft release $TAG contains $published_asset_count assets; expected exactly 5."
             exit 1
           fi
 
@@ -278,6 +302,7 @@ jobs:
             bHapticsOSC.exe \
             bHapticsOSC-VRChat.unitypackage \
             "$VPM_ARCHIVE" \
+            "$COMPRESSOR_ARCHIVE" \
             package.json
           do
             grep -Fxq "$required_asset" <<< "$published_assets"

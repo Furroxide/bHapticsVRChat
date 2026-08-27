@@ -29,14 +29,20 @@ namespace Furroxide.ContactCompressor.Tests
 
         /// <summary>
         /// Mirrors the plans in bCompressor. Deliberately restated rather than referenced, so this
-        /// package's tests do not depend on the bHaptics package's assembly.
+        /// package's tests do not depend on the bHaptics package's assembly - which means these
+        /// strings have to be kept in step with bCompressor.Plans by hand.
+        ///
+        /// The patterns cover both desktop namings because bCompressor does. Only the "With Mesh"
+        /// prefabs are compared against the shipped manifest, though: that manifest describes those
+        /// prefabs, and the mesh-free head is a different device (six motors, not four). The
+        /// bHaptics package's own bCompressorPrefabCoverageTests covers the other variants.
         /// </summary>
         static readonly object[] RegionCases =
         {
-            new object[] { "Torso", "Vest.prefab", EncoderAxes.XYZ, @"^bOSC/v2/(?:VestFront|VestBack)/\d+/(?:self|others)$" },
-            new object[] { "Head", "Head.prefab", EncoderAxes.X, @"^bOSC/v2/Head/\d+/(?:self|others)$" },
-            new object[] { "ForearmL", "ArmLeft.prefab", EncoderAxes.XYZ, @"^bOSC/v2/ForearmL/\d+/(?:self|others)$" },
-            new object[] { "ForearmR", "ArmRight.prefab", EncoderAxes.XYZ, @"^bOSC/v2/ForearmR/\d+/(?:self|others)$" }
+            new object[] { "Torso", "Vest.prefab", EncoderAxes.XYZ, @"^(?:bOSC/v2/(?:VestFront|VestBack)/\d+/(?:self|others)|bOSC_v1_(?:VestFront|VestBack)_\d+)$" },
+            new object[] { "Head", "Head.prefab", EncoderAxes.X, @"^(?:bOSC/v2/Head/\d+/(?:self|others)|bOSC_v1_Head_\d+)$" },
+            new object[] { "ForearmL", "ArmLeft.prefab", EncoderAxes.XYZ, @"^(?:bOSC/v2/ForearmL/\d+/(?:self|others)|bOSC_v1_ForearmL_\d+)$" },
+            new object[] { "ForearmR", "ArmRight.prefab", EncoderAxes.XYZ, @"^(?:bOSC/v2/ForearmR/\d+/(?:self|others)|bOSC_v1_ForearmR_\d+)$" }
         };
 
         static ContactCompressorManifest LoadManifest()
@@ -75,8 +81,8 @@ namespace Furroxide.ContactCompressor.Tests
                 group.sourceRoot = instance.transform;
                 group.frameOverride = instance.transform;
                 group.sourceParameterPattern = pattern;
-                group.pointIdPattern = "^bOSC/v2/(.+)/(?:self|others)$";
-                group.pointIdReplacement = "$1";
+                group.pointIdPattern = @"^(?:bOSC/v2/(?<dev>[^/]+)/(?<node>\d+)/(?:self|others)|bOSC_v1_(?<dev>[A-Za-z]+)_(?<node>\d+))$";
+                group.pointIdReplacement = "${dev}/${node}";
 
                 FittedRegion fit = ContactRegionFitter.Fit(group);
                 Assert.IsTrue(fit.IsValid, string.Join("; ", fit.Errors));
@@ -130,8 +136,8 @@ namespace Furroxide.ContactCompressor.Tests
                 group.sourceRoot = instance.transform;
                 group.frameOverride = instance.transform;
                 group.sourceParameterPattern = pattern;
-                group.pointIdPattern = "^bOSC/v2/(.+)/(?:self|others)$";
-                group.pointIdReplacement = "$1";
+                group.pointIdPattern = @"^(?:bOSC/v2/(?<dev>[^/]+)/(?<node>\d+)/(?:self|others)|bOSC_v1_(?<dev>[A-Za-z]+)_(?<node>\d+))$";
+                group.pointIdReplacement = "${dev}/${node}";
 
                 FittedRegion fit = ContactRegionFitter.Fit(group);
                 Assert.IsTrue(fit.IsValid, string.Join("; ", fit.Errors));

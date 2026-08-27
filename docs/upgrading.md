@@ -6,15 +6,28 @@ Use this guide when updating the Windows app, the Unity avatar package, or an av
 
 1. In Unity, open **bHapticsOSC > Setup Assistant** and review the version shown in the **bHapticsOSC Setup** window.
 2. Use **Download matching version** to start the direct executable download required by the installed Unity package, or **Latest release** to open the newest GitHub Release in your browser.
-3. Close any running copy of `bHapticsOSC.exe`.
-4. Replace the old executable in its existing folder so the adjacent `Config` folder and your settings remain in place. If you use a different folder, choose **Locate existing app** again.
+3. Close any running copy of `bHapticsOSC.exe`, or use **Stop the unsupported app** when the assistant offers it.
+4. Replace the old executable in its existing folder so the adjacent `Config` folder and your settings remain in place. If you use a different folder, choose **Find automatically** or **Locate existing app** again.
 5. Use **Recheck** to verify the executable's product identity and file version.
 6. Start bHaptics Player, then use **Launch** or start `bHapticsOSC.exe` yourself and leave it open while using VRChat.
 7. In VRChat, confirm **Action Menu → OSC → Enabled** is on. See VRChat's [OSC overview](https://docs.vrchat.com/docs/osc-overview).
 
 The Setup Assistant never downloads, replaces, or launches software
-automatically. The direct latest-download link remains available at
+automatically, and never closes a running app without asking first. The direct
+latest-download link remains available at
 [`bHapticsOSC.exe`](https://github.com/furroxide/bHapticsVRChat/releases/latest/download/bHapticsOSC.exe).
+
+### Coming from the Official bHaptics App
+
+The official bHaptics releases (`bHapticsOSC_v2.2.1.exe` and older) are a
+different build, not an older version of this one. They cannot decode the
+compressed contact parameters this package generates, so haptics stay silent
+even though everything looks connected. The Setup Assistant reports these as
+**Unsupported bHapticsOSC build** rather than as an update, and offers to close
+the running copy so it stops holding the VRChat OSC port. Download the
+supported build, stop the old app, and point the assistant at the new
+executable. The old executable can then be deleted; keep its `Config` folder if
+you want to carry your device settings over.
 
 ## Update the Unity Package
 

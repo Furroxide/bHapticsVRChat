@@ -11,21 +11,30 @@ namespace bHapticsOSC.VRChat
     {
         private const string WindowTitle = "bHapticsOSC Setup";
         private const string AvatarSetupCompleteSessionKey = bCompanionRequirements.PackageId + ".avatar-setup-complete";
+        private const string AutoLocateSessionKey = bCompanionRequirements.PackageId + ".auto-locate-attempted";
 
         private Vector2 scrollPosition;
         private bCompanionStatusResult companionStatus;
+        private bEnvironment environment;
         private string actionMessage = string.Empty;
         private MessageType actionMessageType = MessageType.None;
         private bool avatarSetupJustCompleted;
+
+        /// <summary>
+        /// Set while the window is being opened by something other than the user, so the
+        /// automatic disk search never runs behind an unasked-for window.
+        /// </summary>
+        private static bool suppressAutoLocateOnce;
 
         internal static void ShowWindow()
         {
             bCompanionSetupWindow window = GetWindow<bCompanionSetupWindow>();
             window.titleContent = new GUIContent(WindowTitle);
-            window.minSize = new Vector2(460f, 520f);
+            window.minSize = new Vector2(460f, 560f);
             window.ConsumeAvatarSetupCompleteFlag();
             window.Show();
             window.Recheck();
+            window.ScheduleAutoLocate();
         }
 
         internal static void ShowAvatarSetupComplete()
@@ -34,12 +43,27 @@ namespace bHapticsOSC.VRChat
             ShowWindow();
         }
 
+        /// <summary>Opens the window on the user's behalf, without the automatic disk search.</summary>
+        internal static void ShowUnattended()
+        {
+            suppressAutoLocateOnce = true;
+            try
+            {
+                ShowWindow();
+            }
+            finally
+            {
+                suppressAutoLocateOnce = false;
+            }
+        }
+
         private void OnEnable()
         {
             titleContent = new GUIContent(WindowTitle);
-            minSize = new Vector2(460f, 520f);
+            minSize = new Vector2(460f, 560f);
             ConsumeAvatarSetupCompleteFlag();
             Recheck();
+            ScheduleAutoLocate();
         }
 
         private void OnDisable()
@@ -70,7 +94,7 @@ namespace bHapticsOSC.VRChat
             GUILayout.Space(8f);
             DrawCompanionSection();
             GUILayout.Space(8f);
-            DrawManualChecklist();
+            DrawEnvironmentChecklist();
 
             if (!string.IsNullOrWhiteSpace(actionMessage))
             {
@@ -105,13 +129,28 @@ namespace bHapticsOSC.VRChat
                 bCompanionStatusGUI.GetMessageType(companionStatus));
 
             if (!string.IsNullOrWhiteSpace(companionStatus.ExecutablePath))
-                EditorGUILayout.SelectableLabel(companionStatus.ExecutablePath, EditorStyles.textField, GUILayout.Height(EditorGUIUtility.singleLineHeight));
+            {
+                EditorGUILayout.SelectableLabel(
+                    companionStatus.ExecutablePath,
+                    EditorStyles.textField,
+                    GUILayout.Height(EditorGUIUtility.singleLineHeight));
+            }
 
             EditorGUILayout.LabelField($"Required version: {companionStatus.RequiredVersion}");
 
+            if (companionStatus.HasConflictingProcess)
+            {
+                EditorGUILayout.HelpBox(
+                    $"'{companionStatus.ConflictingProcessName}' is also running. Two companion apps cannot share the "
+                    + "VRChat OSC port, so haptics may silently stop working until the unsupported one is closed.",
+                    MessageType.Warning);
+            }
+
+            bool isWindows = Application.platform == RuntimePlatform.WindowsEditor;
+
             using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button("Download matching version"))
+                if (GUILayout.Button(bCompanionStatusGUI.GetDownloadButtonLabel(companionStatus)))
                     Application.OpenURL(bCompanionRequirements.GetMatchingDownloadUrl(companionStatus.RequiredVersion));
 
                 if (GUILayout.Button("Latest release"))
@@ -120,9 +159,11 @@ namespace bHapticsOSC.VRChat
 
             using (new EditorGUILayout.HorizontalScope())
             {
-                bool isWindows = Application.platform == RuntimePlatform.WindowsEditor;
                 using (new EditorGUI.DisabledScope(!isWindows))
                 {
+                    if (GUILayout.Button("Find automatically"))
+                        RunAutoLocate(false);
+
                     if (GUILayout.Button("Locate existing app"))
                         LocateExistingApp();
                 }
@@ -136,32 +177,142 @@ namespace bHapticsOSC.VRChat
                 if (GUILayout.Button("Recheck"))
                     Recheck();
             }
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                using (new EditorGUI.DisabledScope(!isWindows || !companionStatus.HasUnsupportedProcessRunning))
+                {
+                    if (GUILayout.Button("Stop the unsupported app"))
+                        StopUnsupportedCompanion();
+                }
+
+                using (new EditorGUI.DisabledScope(
+                    string.IsNullOrWhiteSpace(bCompanionStatusDetector.RememberedExecutablePath)))
+                {
+                    if (GUILayout.Button("Forget remembered app"))
+                        ForgetRememberedApp();
+                }
+            }
         }
 
-        private static void DrawManualChecklist()
+        /// <summary>
+        /// The two things that live outside Unity. Both used to say "this must be confirmed
+        /// manually", which asked the user to go and check what the machine already knows - and
+        /// said nothing at all to the user whose Player was closed or whose OSC was off, which is
+        /// exactly the state that produces silent no-haptics in VRChat.
+        /// </summary>
+        private void DrawEnvironmentChecklist()
         {
             EditorGUILayout.LabelField("Before playing", EditorStyles.boldLabel);
-            DrawChecklistItem(
-                false,
-                "bHaptics Player",
-                "Install bHaptics Player, pair your devices, and leave it running. This must be confirmed manually.");
-            if (GUILayout.Button("Open bHaptics Player downloads"))
-                Application.OpenURL(bCompanionRequirements.BHapticsPlayerUrl);
 
+            if (Application.platform != RuntimePlatform.WindowsEditor)
+            {
+                DrawChecklistItem(
+                    "Check",
+                    "bHaptics Player and VRChat OSC",
+                    "Both live on the Windows PC you play on, so they cannot be checked from this editor.");
+                return;
+            }
+
+            DrawPlayerRow();
             GUILayout.Space(4f);
+            DrawOscRow();
+        }
+
+        private void DrawPlayerRow()
+        {
+            if (environment.PlayerRunning == bProbeState.Yes)
+            {
+                DrawChecklistItem(
+                    "Ready",
+                    "bHaptics Player",
+                    string.IsNullOrEmpty(environment.PlayerVersion)
+                        ? "Running. Your devices need to be paired and switched on in it."
+                        : $"Running (version {environment.PlayerVersion}). Your devices need to be paired and "
+                          + "switched on in it.");
+                return;
+            }
+
+            if (environment.PlayerInstalled == bProbeState.Yes)
+            {
+                DrawChecklistItem(
+                    "Action",
+                    "bHaptics Player",
+                    "Installed, but not running. Start it and pair your devices before playing - nothing "
+                    + "reaches your gear without it.");
+                return;
+            }
+
             DrawChecklistItem(
-                false,
-                "VRChat OSC",
-                "Enable OSC in VRChat's Action Menu under OSC > Enabled. Leave bHapticsOSC running while you play; this must be confirmed manually.");
-            if (GUILayout.Button("Open VRChat OSC guidance"))
+                "Action",
+                "bHaptics Player",
+                "Not found on this PC. It is bHaptics' own app, and it is what actually drives your gear.");
+
+            if (GUILayout.Button("Get bHaptics Player"))
+                Application.OpenURL(bCompanionRequirements.BHapticsPlayerUrl);
+        }
+
+        private void DrawOscRow()
+        {
+            switch (environment.OscEnabled)
+            {
+                case bProbeState.Yes:
+                    DrawChecklistItem("Ready", "VRChat OSC", DescribeOscEvidence("Turned on in VRChat on this PC."));
+                    return;
+
+                case bProbeState.No:
+                    DrawChecklistItem(
+                        "Action",
+                        "VRChat OSC",
+                        "Turned off in VRChat on this PC. In VRChat, open the Action Menu and turn on "
+                        + "OSC > Enabled - without it your avatar's touches never reach the companion app.");
+                    break;
+
+                default:
+                    DrawChecklistItem(
+                        "Check",
+                        "VRChat OSC",
+                        DescribeOscEvidence(
+                            "Could not be read on this PC. In VRChat, open the Action Menu and make sure "
+                            + "OSC > Enabled is on."));
+                    break;
+            }
+
+            if (GUILayout.Button("How to turn on OSC"))
                 Application.OpenURL(bCompanionRequirements.VrchatOscGuideUrl);
         }
 
+        /// <summary>
+        /// Adds what VRChat's own files show on top of the setting. Seeing this package's
+        /// parameters on an avatar VRChat has loaded is the only proof available inside Unity that
+        /// the whole chain works.
+        /// </summary>
+        private string DescribeOscEvidence(string lead)
+        {
+            if (environment.HasHapticAvatar)
+            {
+                return lead + $"\n\nVRChat has loaded '{environment.HapticAvatarName}' with this package's "
+                       + "haptic parameters, so the avatar side is working.";
+            }
+
+            if (environment.HasSeenOscConfig)
+            {
+                return lead + $"\n\nVRChat last saved an OSC config on "
+                       + $"{environment.OscConfigWritten:d MMM yyyy}, but none of the recent ones carry this "
+                       + "package's haptic parameters yet.";
+            }
+
+            return lead;
+        }
+
         private static void DrawChecklistItem(bool ready, string title, string details)
+            => DrawChecklistItem(ready ? "Ready" : "Action", title, details);
+
+        private static void DrawChecklistItem(string state, string title, string details)
         {
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                EditorGUILayout.LabelField($"{(ready ? "Ready" : "Action")} — {title}", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField($"{state} — {title}", EditorStyles.boldLabel);
                 EditorGUILayout.LabelField(details, EditorStyles.wordWrappedLabel);
             }
         }
@@ -172,7 +323,7 @@ namespace bHapticsOSC.VRChat
             string initialDirectory = string.Empty;
             if (!string.IsNullOrWhiteSpace(rememberedPath))
             {
-                string directory = Path.GetDirectoryName(rememberedPath);
+                string directory = SafeGetDirectoryName(rememberedPath);
                 if (!string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory))
                     initialDirectory = directory;
             }
@@ -184,10 +335,128 @@ namespace bHapticsOSC.VRChat
             if (string.IsNullOrWhiteSpace(selectedPath))
                 return;
 
+            // Judge the file the user actually picked. Reading the global detector instead would
+            // report on whatever else happens to be running, and a mis-picked file would replace
+            // a working remembered path while being told it was fine.
+            bCompanionStatusResult selected = bCompanionStatusDetector.InspectExecutable(
+                selectedPath,
+                false,
+                bCompanionRequirements.RequiredVersion);
+
+            if (selected.Lineage == bCompanionBuildLineage.Unrelated)
+            {
+                actionMessage =
+                    $"{Path.GetFileName(selectedPath)} is not a bHapticsOSC app, so it was not remembered. "
+                    + bCompanionStatusGUI.GetDetails(selected);
+                actionMessageType = MessageType.Error;
+                Recheck();
+                return;
+            }
+
             bCompanionStatusDetector.SetRememberedExecutablePath(selectedPath);
             Recheck();
-            actionMessage = bCompanionStatusGUI.GetDetails(companionStatus);
-            actionMessageType = bCompanionStatusGUI.GetMessageType(companionStatus);
+            actionMessage = $"{selectedPath}\n{bCompanionStatusGUI.GetDetails(selected)}";
+            actionMessageType = bCompanionStatusGUI.GetMessageType(selected);
+        }
+
+        private void ForgetRememberedApp()
+        {
+            bCompanionStatusDetector.SetRememberedExecutablePath(null);
+            SessionState.SetBool(AutoLocateSessionKey, false);
+            Recheck();
+            actionMessage = "Forgot the remembered companion app.";
+            actionMessageType = MessageType.Info;
+        }
+
+        /// <summary>
+        /// Scans the usual download locations so the common case - the portable app sitting in
+        /// Downloads - needs no file dialog at all.
+        /// </summary>
+        private void RunAutoLocate(bool automatic)
+        {
+            bCompanionLocator.bLocatorResult located;
+            try
+            {
+                located = bCompanionLocator.Locate();
+            }
+            catch (Exception exception)
+            {
+                Recheck();
+                actionMessage = $"The search could not be completed: {exception.Message}";
+                actionMessageType = MessageType.Warning;
+                return;
+            }
+
+            if (located.Found)
+            {
+                bCompanionStatusResult found = bCompanionStatusDetector.InspectExecutable(
+                    located.ExecutablePath,
+                    false,
+                    bCompanionRequirements.RequiredVersion);
+
+                // An unattended scan reports what it found but does not adopt it: the remembered
+                // path is shared by every project on the machine, and the most likely find on a
+                // fresh install is the upstream build this package exists to replace.
+                if (found.IsReady || !automatic)
+                    bCompanionStatusDetector.SetRememberedExecutablePath(located.ExecutablePath);
+
+                Recheck();
+                actionMessage = $"Found {located.ExecutablePath}\n{bCompanionStatusGUI.GetDetails(found)}";
+                actionMessageType = bCompanionStatusGUI.GetMessageType(found);
+                return;
+            }
+
+            Recheck();
+            if (located.Cancelled)
+            {
+                actionMessage = "Search cancelled.";
+                actionMessageType = MessageType.Info;
+                return;
+            }
+
+            if (automatic)
+                return;
+
+            actionMessage =
+                "No bHapticsOSC executable was found in Downloads, on the Desktop, or under the usual install "
+                + "folders. Download the matching version, or use Locate existing app if you keep it elsewhere.";
+            actionMessageType = MessageType.Warning;
+        }
+
+        /// <summary>
+        /// Runs the automatic search once per editor session, and only when nothing was found,
+        /// so opening the window never costs a filesystem sweep it does not need.
+        /// </summary>
+        private void ScheduleAutoLocate()
+        {
+            if (suppressAutoLocateOnce)
+                return;
+            if (Application.platform != RuntimePlatform.WindowsEditor)
+                return;
+            if (Application.isBatchMode)
+                return;
+            if (SessionState.GetBool(AutoLocateSessionKey, false))
+                return;
+            if (companionStatus.Status != bCompanionStatus.NotLocated)
+                return;
+
+            EditorApplication.delayCall += RunScheduledAutoLocate;
+        }
+
+        private void RunScheduledAutoLocate()
+        {
+            // The window can be closed between scheduling and the delayed call.
+            if (this == null)
+                return;
+            if (SessionState.GetBool(AutoLocateSessionKey, false))
+                return;
+
+            Recheck();
+            if (companionStatus.Status != bCompanionStatus.NotLocated)
+                return;
+
+            SessionState.SetBool(AutoLocateSessionKey, true);
+            RunAutoLocate(true);
         }
 
         private void LaunchCompanion()
@@ -202,11 +471,44 @@ namespace bHapticsOSC.VRChat
                 actionMessage = $"Unable to launch bHapticsOSC: {error}";
                 actionMessageType = MessageType.Error;
             }
+
+            Recheck();
+        }
+
+        private void StopUnsupportedCompanion()
+        {
+            string label = string.IsNullOrWhiteSpace(companionStatus.ConflictingProcessName)
+                ? "the running bHapticsOSC app"
+                : $"'{companionStatus.ConflictingProcessName}'";
+
+            if (!EditorUtility.DisplayDialog(
+                    "Stop the unsupported companion app",
+                    $"Close {label}?\n\nIt holds the VRChat OSC port, so the supported build receives nothing while "
+                    + "it runs. Any unsaved companion settings may be lost.",
+                    "Stop it",
+                    "Cancel"))
+                return;
+
+            if (bCompanionStatusDetector.TryStopUnsupported(out int stoppedCount, out string error))
+            {
+                actionMessage = stoppedCount == 1
+                    ? "Closed the unsupported companion app."
+                    : $"Closed {stoppedCount} unsupported companion processes.";
+                actionMessageType = MessageType.Info;
+            }
+            else
+            {
+                actionMessage = $"Unable to close the companion app: {error}";
+                actionMessageType = MessageType.Error;
+            }
+
+            Recheck();
         }
 
         private void Recheck()
         {
             companionStatus = bCompanionStatusDetector.Detect(true);
+            environment = bEnvironmentProbes.Probe(true);
             Repaint();
         }
 
@@ -217,6 +519,18 @@ namespace bHapticsOSC.VRChat
 
             SessionState.SetBool(AvatarSetupCompleteSessionKey, false);
             avatarSetupJustCompleted = true;
+        }
+
+        private static string SafeGetDirectoryName(string path)
+        {
+            try
+            {
+                return Path.GetDirectoryName(path) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         private static PackageInfo FindPackage(string packageId)
@@ -298,7 +612,7 @@ namespace bHapticsOSC.VRChat
 
             // Mark before opening so an assembly reload cannot create a loop.
             Dismiss(requiredVersion);
-            bCompanionSetupWindow.ShowWindow();
+            bCompanionSetupWindow.ShowUnattended();
         }
 
         internal static string GetPreferenceKey(string version)
@@ -323,12 +637,20 @@ namespace bHapticsOSC.VRChat
                     $"{GetSummary(status)}\n{GetDetails(status)}",
                     GetMessageType(status));
 
+                if (status.HasConflictingProcess)
+                {
+                    EditorGUILayout.HelpBox(
+                        $"'{status.ConflictingProcessName}' is also running and will compete for the VRChat OSC port. "
+                        + "Open Setup Assistant to close it.",
+                        MessageType.Warning);
+                }
+
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     if (GUILayout.Button("Setup Assistant"))
                         bCompanionSetupWindow.ShowWindow();
                     if (GUILayout.Button("Recheck"))
-                        bCompanionStatusDetector.Detect(true);
+                        bCompanionStatusDetector.InvalidateCache();
                 }
             }
 
@@ -347,6 +669,12 @@ namespace bHapticsOSC.VRChat
                     return "Remembered companion app is missing";
                 case bCompanionStatus.InvalidProduct:
                     return "Selected executable is not bHapticsOSC";
+                case bCompanionStatus.ForeignBuild:
+                    return result.IsRunning
+                        ? "Unsupported bHapticsOSC build is running"
+                        : "Unsupported bHapticsOSC build installed";
+                case bCompanionStatus.RunningUninspectable:
+                    return "Companion app is running but could not be inspected";
                 case bCompanionStatus.UnknownVersion:
                     return "Companion app version is unknown";
                 case bCompanionStatus.Outdated:
@@ -367,13 +695,19 @@ namespace bHapticsOSC.VRChat
                 case bCompanionStatus.UnsupportedPlatform:
                     return "bHapticsOSC is a portable Windows app. Download, locate, and run it on the Windows PC used for VRChat.";
                 case bCompanionStatus.NotLocated:
-                    return "No running bHapticsOSC process or remembered executable was found. Download it or locate an existing copy.";
+                    return "No running bHapticsOSC process or remembered executable was found. Use Find automatically, download it, or locate an existing copy.";
                 case bCompanionStatus.MissingPath:
                     return "The remembered executable path no longer exists. Locate the app again or download the matching version.";
                 case bCompanionStatus.InvalidProduct:
                     return string.IsNullOrWhiteSpace(result.DetectedProductName)
                         ? $"The selected file does not identify itself as {bCompanionRequirements.ProductName}."
                         : $"The selected file identifies itself as '{result.DetectedProductName}', not {bCompanionRequirements.ProductName}.";
+                case bCompanionStatus.ForeignBuild:
+                    return BuildForeignDetails(result);
+                case bCompanionStatus.RunningUninspectable:
+                    return string.IsNullOrWhiteSpace(result.DetectedProcessName)
+                        ? "A bHapticsOSC process is running, but Windows would not say which file it came from, so its version could not be checked. This usually means the app was started as administrator while Unity was not. Use Locate existing app to point at its executable, or restart both at the same permission level."
+                        : $"'{result.DetectedProcessName}' is running, but Windows would not say which file it came from, so its version could not be checked. This usually means the app was started as administrator while Unity was not. Use Locate existing app to point at its executable, or restart both at the same permission level.";
                 case bCompanionStatus.UnknownVersion:
                     return $"The app version could not be read. Version {result.RequiredVersion} or newer is required.";
                 case bCompanionStatus.Outdated:
@@ -387,16 +721,45 @@ namespace bHapticsOSC.VRChat
             }
         }
 
+        /// <summary>
+        /// The upstream bHaptics release is the app most users already have, and it looks
+        /// correct from the outside. Say plainly that it is a different build and that it has
+        /// to be replaced, not updated - its version number is not comparable to this fork's.
+        /// </summary>
+        private static string BuildForeignDetails(bCompanionStatusResult result)
+        {
+            string identity = string.IsNullOrWhiteSpace(result.DetectedProductName)
+                ? "A different bHapticsOSC build"
+                : $"'{result.DetectedProductName}'";
+            string version = string.IsNullOrWhiteSpace(result.DetectedVersion)
+                ? string.Empty
+                : $" (version {result.DetectedVersion})";
+            string running = result.IsRunning
+                ? " Stop it first: it holds the VRChat OSC port."
+                : string.Empty;
+
+            return $"{identity}{version} is installed, not the build this package needs. It does not understand the "
+                   + $"compressed contact parameters the avatar setup generates, so haptics will not respond. "
+                   + $"Replace it with version {result.RequiredVersion} of the maintained build.{running}";
+        }
+
+        internal static string GetDownloadButtonLabel(bCompanionStatusResult result)
+            => result.Status == bCompanionStatus.ForeignBuild
+                ? "Download the supported build"
+                : "Download matching version";
+
         internal static MessageType GetMessageType(bCompanionStatusResult result)
         {
             switch (result.Status)
             {
                 case bCompanionStatus.InvalidProduct:
                 case bCompanionStatus.Outdated:
+                case bCompanionStatus.ForeignBuild:
                     return MessageType.Error;
                 case bCompanionStatus.NotLocated:
                 case bCompanionStatus.MissingPath:
                 case bCompanionStatus.UnknownVersion:
+                case bCompanionStatus.RunningUninspectable:
                     return MessageType.Warning;
                 default:
                     return MessageType.Info;

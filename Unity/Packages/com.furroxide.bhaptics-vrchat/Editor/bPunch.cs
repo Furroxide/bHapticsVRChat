@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 using VRC.Dynamics;
+using VRC.SDK3.Dynamics.Contact.Components;
 
 namespace bHapticsOSC.VRChat
 {
@@ -113,7 +114,13 @@ namespace bHapticsOSC.VRChat
                 Undo.SetTransformParent(obj.transform, root, $"[{bHapticsOSCIntegration.SystemName}] Created Punch Receiver");
                 CopyWorldTransform(sourceReceiver.rootTransform == null ? sourceReceiver.transform : sourceReceiver.rootTransform, obj.transform);
 
-                ContactReceiver receiver = Undo.AddComponent<ContactReceiver>(obj);
+                // VRCContactReceiver, not the VRC.Dynamics.ContactReceiver base class it derives
+                // from: only the SDK3 subclass is on the avatar component whitelist, and the SDK
+                // expands that whitelist to derived types only. A base-class instance is stripped
+                // by the client, so the SDK build panel refuses the upload - and if the user takes
+                // its Auto Fix, the punch parameters disappear while the punch menu VRCFury has
+                // already generated stays behind, driving nothing.
+                VRCContactReceiver receiver = Undo.AddComponent<VRCContactReceiver>(obj);
                 receiver.rootTransform = obj.transform;
                 receiver.shapeType = sourceReceiver.shapeType;
                 receiver.radius = sourceReceiver.radius;

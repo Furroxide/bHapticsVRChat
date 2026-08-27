@@ -1,7 +1,12 @@
 [CmdletBinding()]
 param(
     [string]$PackagePath = (Join-Path $PSScriptRoot '..\Unity\Packages\com.furroxide.bhaptics-vrchat'),
-    [string]$OutputPath
+    [string]$OutputPath,
+
+    # Which package this archive is allowed to be. Defaults to the avatar package; the release
+    # pipeline also builds com.furroxide.contact-compressor, which the avatar package declares as
+    # a vpmDependency and which VCC therefore has to be able to resolve from the same listing.
+    [string]$ExpectedPackageName = 'com.furroxide.bhaptics-vrchat'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -29,8 +34,8 @@ try {
 
 $packageName = [string]$manifest.name
 $packageVersion = [string]$manifest.version
-if ($packageName -ne 'com.furroxide.bhaptics-vrchat') {
-    Fail "Expected package name 'com.furroxide.bhaptics-vrchat', got '$packageName'."
+if ($packageName -cne $ExpectedPackageName) {
+    Fail "Expected package name '$ExpectedPackageName', got '$packageName'."
 }
 
 if ($packageVersion -notmatch '^\d+\.\d+\.\d+$') {

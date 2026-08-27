@@ -202,6 +202,137 @@ namespace Furroxide.ContactCompressor.Tests
             Assert.False(solution.InContact);
         }
 
+        // ------------------------------------------------------------------ torn frames
+
+        /// <summary>
+        /// Reads a genuine contact, then puts one face of one axis back to the value it held before
+        /// the contact started - the state the decoder is in when a solve lands between the halves
+        /// of an OSC bundle. The other two axes still carry current values, which is what makes this
+        /// the realistic tear rather than the degenerate single-axis one.
+        /// </summary>
+        static (float[] plus, float[] minus) TornRead(float radius, int tornAxis, bool tearPositiveFace)
+        {
+            var (plus, minus) = ReadRegion(
+                new Vec(0, 0, 0), BoxSize, new[] { Sender.Sphere(ToMetres(0.5f, 0.5f, 0.5f), radius) });
+
+            if (tearPositiveFace) plus[tornAxis] = 0f;
+            else minus[tornAxis] = 0f;
+
+            return (plus, minus);
+        }
+
+        /// <summary>
+        /// The torn axis must not drag the healthy axes' real footprint into a fabricated spread.
+        /// Left unguarded this trips the multi-touch threshold, collapses confidence below Sample's
+        /// default, and lights every motor in the region at full intensity on every contact edge.
+        /// </summary>
+        [Theory]
+        [InlineData(0, true)]
+        [InlineData(0, false)]
+        [InlineData(1, true)]
+        [InlineData(1, false)]
+        [InlineData(2, true)]
+        [InlineData(2, false)]
+        public void TornAxis_DoesNotFabricateSpread(int tornAxis, bool tearPositiveFace)
+        {
+            var (plus, minus) = TornRead(0.06f, tornAxis, tearPositiveFace);
+
+            var solution = ContactEncoderSolver.Solve(plus, minus, BoxExtents, RegionExtents, EncoderAxes.XYZ);
+
+            Assert.True(solution.InContact);
+            Assert.False(solution.IsMultiTouch,
+                $"axis {tornAxis} tear reported spread {solution.Spread:F4} " +
+                $"(normalised {solution.SpreadNormalised:F4})");
+            Assert.True(solution.SpreadNormalised < ContactSolution.MultiTouchThreshold,
+                $"spread normalised to {solution.SpreadNormalised:F4}");
+        }
+
+        /// <summary>
+        /// Dropping the torn axis must not throw away what the healthy axes measured: the sender is
+        /// still sized from them, so the response is a real falloff rather than a flat one.
+        /// </summary>
+        [Theory]
+        [InlineData(0.03f)]
+        [InlineData(0.06f)]
+        [InlineData(0.09f)]
+        public void TornAxis_StillMeasuresTheSenderFromTheHealthyAxes(float radius)
+        {
+            var (plus, minus) = TornRead(radius, 0, tearPositiveFace: false);
+
+            var solution = ContactEncoderSolver.Solve(plus, minus, BoxExtents, RegionExtents, EncoderAxes.XYZ);
+
+            Assert.True(solution.InContact);
+            Assert.Equal(radius, solution.SenderRadius, 2);
+        }
+
+        /// <summary>
+        /// When every active axis is torn there is a contact but nothing trustworthy about it. It
+        /// must report as such rather than deriving a radius and spread from unset sentinels - the
+        /// original defect, where the maximum's 0 seed became a spread nobody measured.
+        /// </summary>
+        [Fact]
+        public void EveryAxisTorn_ReportsContactWithoutInventingGeometry()
+        {
+            var (plus, minus) = ReadRegion(
+                new Vec(0, 0, 0), BoxSize, new[] { Sender.Sphere(ToMetres(0.5f, 0.5f, 0.5f), 0.05f) });
+            for (int axis = 0; axis < 3; axis++) minus[axis] = 0f;
+
+            var solution = ContactEncoderSolver.Solve(plus, minus, BoxExtents, RegionExtents, EncoderAxes.XYZ);
+
+            Assert.True(solution.InContact);
+            Assert.Equal(0f, solution.Spread, 5);
+            Assert.Equal(0f, solution.SenderRadius, 5);
+            Assert.False(solution.IsMultiTouch);
+            Assert.True(solution.Confidence < 1f, "an entirely torn frame must not be reported as certain");
+        }
+
+        /// <summary>
+        /// The single-axis head region has no second axis to fall back on, so a tear there has to
+        /// degrade quietly rather than produce a spread out of one measurement.
+        /// </summary>
+        [Fact]
+        public void TornAxis_OnASingleAxisRegion_ReportsNoSpread()
+        {
+            var (plus, minus) = TornRead(0.05f, 0, tearPositiveFace: false);
+
+            var solution = ContactEncoderSolver.Solve(plus, minus, BoxExtents, RegionExtents, EncoderAxes.X);
+
+            Assert.Equal(0f, solution.Spread, 5);
+            Assert.False(solution.IsMultiTouch);
+        }
+
+        /// <summary>
+        /// A parameter that arrives as NaN must not become a sender the size of the universe. NaN
+        /// fails every ordered comparison, so it has to be rejected explicitly rather than left to
+        /// the min/max updates.
+        /// </summary>
+        [Fact]
+        public void NaNParameters_DoNotProduceAnInfiniteSender()
+        {
+            var plus = new[] { float.NaN, float.NaN, float.NaN };
+            var minus = new[] { float.NaN, float.NaN, float.NaN };
+
+            var solution = ContactEncoderSolver.Solve(plus, minus, BoxExtents, RegionExtents, EncoderAxes.XYZ);
+
+            Assert.Equal(0f, solution.SenderRadius, 5);
+            Assert.Equal(0f, solution.Spread, 5);
+        }
+
+        /// <summary>
+        /// The guard must not be satisfiable by flattening every measurement: an untorn contact
+        /// still reports its real radius and no spread.
+        /// </summary>
+        [Fact]
+        public void UntornContacts_AreStillMeasuredNormally()
+        {
+            var solution = SolveFor(Sender.Sphere(ToMetres(0.5f, 0.5f, 0.5f), 0.05f));
+
+            Assert.True(solution.InContact);
+            Assert.Equal(0.05f, solution.SenderRadius, 2);
+            Assert.Equal(0f, solution.Spread, 2);
+            Assert.Equal(1f, solution.Confidence, 3);
+        }
+
         // ------------------------------------------------------------------ helpers
 
         static IEnumerable<(float u, float v, float w)> SampleGrid()

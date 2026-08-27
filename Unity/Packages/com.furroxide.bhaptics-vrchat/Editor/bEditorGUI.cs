@@ -22,8 +22,8 @@ namespace bHapticsOSC.VRChat
 
 			editorComp = (bHapticsOSCIntegration)target;
 			bCompanionStatusGUI.DrawInspectorCard();
-			editorComp.Validate();
-			if (editorComp.avatar == null)
+
+			if (!DrawSetupProblem(editorComp))
 				return;
 
 			if (editorComp.AllUserSettings == null)
@@ -236,16 +236,34 @@ namespace bHapticsOSC.VRChat
 			bGUI.DrawSeparator();
 			*/
 
-			if (!editorComp.IsReadyToApply())
-			{
-				bGUI.DrawHelpBox(bGUI.HelpBoxType.NotReadyToApply);
-				return;
-			}
-
 			DrawContactCompressionToggle(editorComp);
 
-			if (bGUI.DrawButton("CREATE VRCFURY SETUP"))
+			// Drawn disabled rather than hidden, with the blocker as its label: a primary action
+			// that vanishes leaves the user with nothing to aim at and no idea what is missing.
+			bool readyToApply = editorComp.IsReadyToApply();
+			bool create;
+			using (new EditorGUI.DisabledScope(!readyToApply))
 			{
+				create = bGUI.DrawButton(readyToApply
+					? "CREATE VRCFURY SETUP"
+					: "ADD AT LEAST ONE DEVICE FIRST");
+			}
+
+			if (!readyToApply)
+			{
+				EditorGUILayout.LabelField(
+					"Pick a body part on the figure above, then use + ADD DEVICE.",
+					EditorStyles.wordWrappedMiniLabel);
+			}
+
+			if (create)
+			{
+				// One undo group for the whole pipeline. It creates objects, moves the user's
+				// device prefabs, adds components and writes assets; without this, backing out
+				// means dozens of separate Ctrl+Z presses through a half-built setup.
+				int undoGroup = Undo.GetCurrentGroup();
+				Undo.SetCurrentGroupName("Create bHapticsOSC VRCFury setup");
+
 				try
 				{
 					EditorUtility.DisplayProgressBar(bHapticsOSCIntegration.SystemName, "Preparing bHaptics objects...", 0.1f);
@@ -277,15 +295,31 @@ namespace bHapticsOSC.VRChat
 
 					EditorUtility.ClearProgressBar();
 					Debug.Log("VRCFury setup complete. To remove its generated assets, delete the bHapticsOSC VRCFury object, save, and close the scene or prefab.");
+
+					// Destroyed through Undo so the whole setup collapses into one entry: a single
+					// Ctrl+Z brings the user back to the device picker with their choices intact.
+					Undo.DestroyObjectImmediate(editorComp);
+					Undo.CollapseUndoOperations(undoGroup);
+
 					bCompanionSetupWindow.ShowAvatarSetupComplete();
-					DestroyImmediate(editorComp);
 				}
 				catch (System.Exception e)
 				{
 					EditorUtility.ClearProgressBar();
 					Debug.LogException(e);
-					EditorUtility.DisplayDialog(bHapticsOSCIntegration.SystemName, $"Unable to create VRCFury setup:\n{e.Message}", "OK");
+
+					// Roll the avatar back rather than leaving it half-built. Generated assets on
+					// disk are cleaned up by the existing bVrcFurySetup cleanup path.
+					Undo.RevertAllDownToGroup(undoGroup);
+
+					EditorUtility.DisplayDialog(
+						bHapticsOSCIntegration.SystemName,
+						$"Unable to create the VRCFury setup, so the avatar was put back as it was.\n\n{e.Message}\n\n"
+						+ "The Console has the full details.",
+						"OK");
 				}
+
+				GUIUtility.ExitGUI();
 			}
 
 			GUILayout.Space(6);
@@ -294,6 +328,83 @@ namespace bHapticsOSC.VRChat
 				EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
 		}
 
+
+		/// <summary>
+		/// Explains why the component cannot be used where it is, and offers the one-click fix.
+		/// Returns true when the component is usable and the rest of the inspector should draw.
+		///
+		/// The component used to delete itself here instead, which looked like the package was
+		/// broken rather than like the component was in the wrong place.
+		/// </summary>
+		private static bool DrawSetupProblem(bHapticsOSCIntegration comp)
+		{
+			bHapticsOSCIntegration.bSetupProblem problem = comp.TryValidate();
+			if (problem == bHapticsOSCIntegration.bSetupProblem.Ok)
+				return true;
+
+			switch (problem)
+			{
+				case bHapticsOSCIntegration.bSetupProblem.NoAvatarDescriptor:
+				{
+					GameObject root = comp.FindAvatarRoot();
+					EditorGUILayout.HelpBox(
+						root != null
+							? $"This belongs on your avatar's root object, '{root.name}' - the one with the VRC "
+							  + "Avatar Descriptor. It is currently on a child object."
+							: "This belongs on your avatar's root object - the one with the VRC Avatar Descriptor. "
+							  + "Select that object and add the component there.",
+						MessageType.Warning);
+
+					using (new EditorGUI.DisabledScope(root == null))
+					{
+						if (GUILayout.Button(root != null ? $"Move it to '{root.name}'" : "Move it to the avatar root"))
+							MoveToAvatarRoot(comp, root);
+					}
+
+					break;
+				}
+
+				case bHapticsOSCIntegration.bSetupProblem.NoAnimator:
+					EditorGUILayout.HelpBox(
+						"This avatar has no Animator, so there are no bones to attach haptic devices to. Add an "
+						+ "Animator with a humanoid avatar rig to the same object, then come back.",
+						MessageType.Warning);
+					break;
+
+				case bHapticsOSCIntegration.bSetupProblem.DuplicateComponent:
+					EditorGUILayout.HelpBox(
+						"This avatar already has a bHapticsOSC Integration component. Only one can be used at a "
+						+ "time - remove this one and use the original.",
+						MessageType.Warning);
+
+					if (GUILayout.Button("Remove this component"))
+					{
+						Undo.DestroyObjectImmediate(comp);
+						GUIUtility.ExitGUI();
+					}
+
+					break;
+			}
+
+			return false;
+		}
+
+		/// <summary>Moves the component to the avatar root, keeping it undoable.</summary>
+		private static void MoveToAvatarRoot(bHapticsOSCIntegration comp, GameObject root)
+		{
+			if (root == null)
+				return;
+
+			int group = Undo.GetCurrentGroup();
+			Undo.SetCurrentGroupName("Move bHapticsOSC Integration to the avatar root");
+
+			Undo.AddComponent<bHapticsOSCIntegration>(root);
+			Undo.DestroyObjectImmediate(comp);
+
+			Undo.CollapseUndoOperations(group);
+			Selection.activeGameObject = root;
+			GUIUtility.ExitGUI();
+		}
 
 		/// <summary>
 		/// Offers contact compression, with the numbers that make the trade-off concrete rather than
@@ -321,25 +432,55 @@ namespace bHapticsOSC.VRChat
 						  + $"Consolidating would make it {after}.",
 					editorComp.ConsolidateContacts ? MessageType.Info : MessageType.None);
 			}
+			else
+			{
+				// Silence here used to read as "this worked". Say plainly that there is nothing to
+				// compress, so the toggle being on is not mistaken for the feature being active.
+				// Deliberately does not guess why: it is equally reached by a hands-only setup and
+				// by a Quest one, and naming the wrong cause is worse than naming none.
+				EditorGUILayout.HelpBox(
+					"Nothing to consolidate. This applies to the vest, head and forearm devices on "
+					+ "the desktop prefabs; none of the currently selected devices use it, so they "
+					+ "are left as they are.",
+					MessageType.None);
+			}
 #endif
 		}
 
 		private static void ApplyContactCompression(bHapticsOSCIntegration editorComp)
 		{
 #if bHapticsOSC_HasContactCompressor
-			if (editorComp.ConsolidateContacts)
-			{
-				bCompressor.ApplyGroups(editorComp);
-
-				// Emitted here rather than left to the user: the layout is fitted to this avatar,
-				// so a manifest from anywhere else describes the wrong geometry and drives the
-				// wrong motors.
-				bCompressor.ExportManifest(editorComp);
-			}
-			else
+			if (!editorComp.ConsolidateContacts)
 			{
 				bCompressor.RemoveGroups(editorComp);
+				return;
 			}
+
+			int applied = bCompressor.ApplyGroups(editorComp);
+			if (applied <= 0)
+			{
+				Debug.LogWarning(
+					$"[{bHapticsOSCIntegration.SystemName}] Contact consolidation is enabled, but none of the "
+					+ "selected devices have receivers it can compress. The avatar is unchanged.");
+				return;
+			}
+
+			// Emitted here rather than left to the user: the layout is fitted to this avatar,
+			// so a manifest from anywhere else describes the wrong geometry and drives the
+			// wrong motors.
+			if (!string.IsNullOrEmpty(bCompressor.ExportManifest(editorComp)))
+				return;
+
+			// Compressed receivers with no manifest is the worst of both worlds: the per-motor
+			// receivers are gone at build time and the companion app has nothing to decode the
+			// replacements with. Take back only the groups this added - a user's own groups
+			// elsewhere on the avatar are not ours to delete - and then fail loudly rather than
+			// letting the setup report success.
+			bCompressor.RemoveGeneratedGroups(editorComp);
+			throw new System.InvalidOperationException(
+				$"Contact compression was applied to {applied} device(s) but no manifest could be produced, so it "
+				+ "has been taken back off. See the console for the region that would not fit.\n"
+				+ "Setup stopped partway: use Undo to return the avatar to its previous state before trying again.");
 #endif
 		}
 

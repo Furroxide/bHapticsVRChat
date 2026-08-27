@@ -31,15 +31,39 @@ open the **bHapticsOSC Setup** window.
 - **Download matching version** starts the direct executable download for the
   companion version required by the installed Unity package.
 - **Latest release** opens the latest GitHub Release in your browser.
+- **Find automatically** searches your Downloads and Desktop folders, the usual
+  install locations, and the folder next to the Unity project for an existing
+  `bHapticsOSC` executable. It runs once by itself the first time the window
+  reports that nothing was found, and can be cancelled at any point.
 - **Locate existing app** lets you choose a previously downloaded
   `bHapticsOSC.exe` and verifies its product identity and file version.
 - **Launch** starts the verified app only when you explicitly request it.
+- **Stop the unsupported app** closes a running companion that is not a
+  supported build, after asking for confirmation. This is only offered when such
+  an app is actually running.
 - **Recheck** refreshes the displayed app status after you download, replace, or
   start the executable.
 
-The assistant never downloads, replaces, or launches software automatically.
-Move the executable to its intended permanent folder before locating it so its
-generated `Config` folder remains alongside it.
+The assistant never downloads, replaces, or launches software automatically, and
+never closes a running app without asking first. Move the executable to its
+intended permanent folder before locating it so its generated `Config` folder
+remains alongside it.
+
+### Replacing the Official bHaptics App
+
+The companion app published by bHaptics as `bHapticsOSC_v2.2.1.exe` and similar
+is a different build from the one this package needs: it speaks the same OSC
+protocol, but it does not understand the compressed contact parameters the
+avatar setup generates, so haptics will not respond. Its version number is not
+comparable to this fork's, so it cannot be "updated" into a supported build.
+
+When such an app is installed or running, the Setup Assistant reports
+**Unsupported bHapticsOSC build** and names the product it found. Use **Download
+the supported build**, then **Stop the unsupported app** so it releases the
+VRChat OSC port, and finally **Find automatically** or **Locate existing app**
+to point the assistant at the new executable. Two companion apps cannot share
+the OSC port, so the assistant also warns when a second one is running
+alongside a supported build.
 
 On macOS and Linux, the Setup Assistant still opens for status guidance and
 browser links. It explains that `bHapticsOSC.exe` must run on the Windows
@@ -65,8 +89,10 @@ warnings on those editor platforms.
 The generated setup is stored under the `bHapticsOSC VRCFury` object on your avatar. After you delete that object and save and close its scene, Unity removes the generated bHapticsOSC assets for that setup.
 
 On Windows, the package shows a non-blocking advisory before upload only for
-bHaptics-enabled avatars when their VRCFury setup is incomplete or the located
-companion app is missing or outdated. The advisory never prevents an upload.
+bHaptics-enabled avatars when their VRCFury setup is incomplete, the located
+companion app is missing, outdated or an unsupported build, or a second
+companion app is competing for the OSC port. The advisory never prevents an
+upload.
 
 ## Legacy Unity Package Fallback
 
