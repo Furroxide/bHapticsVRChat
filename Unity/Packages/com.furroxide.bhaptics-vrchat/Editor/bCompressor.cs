@@ -330,9 +330,16 @@ namespace bHapticsOSC.VRChat
         // added" but actually swept GetComponentsInChildren over the whole device subtree and
         // destroyed every ContactCompressorGroup it found, whoever had put it there - and it
         // ran on the default path, because ConsolidateContacts is false unless the user turns
-        // it on. RemoveGeneratedGroups above is the version that only takes back what this
-        // added, and it is now the only one, so the dangerous behaviour cannot be reached by
-        // picking the friendlier-looking name.
+        // it on. RemoveGeneratedGroups above is the narrowed version: it looks only at the
+        // planned device prefab roots and deletes the single group each of those can hold, so
+        // a group authored deeper in a device subtree, or anywhere else on the avatar, now
+        // survives. It does not tell authorship apart, and cannot - ContactCompressorGroup is
+        // [DisallowMultipleComponent] and carries no field recording who wrote it, so a group
+        // a user put on a prefab root themselves is still removed. That is consistent with
+        // ApplyGroups, which takes such a group over and overwrites its settings rather than
+        // adding a second one. The narrower scope is the whole of the improvement, and this is
+        // now the only entry point, so the subtree-wide behaviour cannot be reached by picking
+        // the friendlier-looking name.
 
         /// <summary>
         /// Receiver counts before and after, for the inspector. Counts only the devices that have a
