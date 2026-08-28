@@ -164,6 +164,15 @@ namespace bHapticsOSC.VRChat
             if (bCompanionInstaller.Phase != renderedInstallerPhase)
             {
                 Rebuild();
+
+                // Recorded here as well, and after the rebuild rather than before it. RefreshInstaller
+                // is what normally stamps the phase, but Rebuild gives up above it when the layout
+                // failed to load and groupsRoot was never bound - so on a broken install the
+                // comparison above stayed true and this retried on every tick for as long as the
+                // window was open. Stamping afterwards keeps RefreshInstaller's own phaseChanged
+                // test intact on the path where it does run, since it will have set this to the
+                // same value already.
+                renderedInstallerPhase = bCompanionInstaller.Phase;
                 return;
             }
 
