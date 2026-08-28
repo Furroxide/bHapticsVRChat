@@ -326,28 +326,20 @@ namespace bHapticsOSC.VRChat
             return removed;
         }
 
-        /// <summary>Strips any groups this previously added, for turning the option back off.</summary>
-        public static int RemoveGroups(bHapticsOSCIntegration editorComp)
-        {
-            if (editorComp == null || editorComp.AllUserSettings == null)
-                return 0;
-
-            int removed = 0;
-
-            foreach (bUserSettings settings in editorComp.AllUserSettings.Values)
-            {
-                if (settings.CurrentPrefab == null)
-                    continue;
-
-                foreach (ContactCompressorGroup group in settings.CurrentPrefab.GetComponentsInChildren<ContactCompressorGroup>(true))
-                {
-                    Undo.DestroyObjectImmediate(group);
-                    removed++;
-                }
-            }
-
-            return removed;
-        }
+        // RemoveGroups used to live here. It claimed to strip "any groups this previously
+        // added" but actually swept GetComponentsInChildren over the whole device subtree and
+        // destroyed every ContactCompressorGroup it found, whoever had put it there - and it
+        // ran on the default path, because ConsolidateContacts is false unless the user turns
+        // it on. RemoveGeneratedGroups above is the narrowed version: it looks only at the
+        // planned device prefab roots and deletes the single group each of those can hold, so
+        // a group authored deeper in a device subtree, or anywhere else on the avatar, now
+        // survives. It does not tell authorship apart, and cannot - ContactCompressorGroup is
+        // [DisallowMultipleComponent] and carries no field recording who wrote it, so a group
+        // a user put on a prefab root themselves is still removed. That is consistent with
+        // ApplyGroups, which takes such a group over and overwrites its settings rather than
+        // adding a second one. The narrower scope is the whole of the improvement, and this is
+        // now the only entry point, so the subtree-wide behaviour cannot be reached by picking
+        // the friendlier-looking name.
 
         /// <summary>
         /// Receiver counts before and after, for the inspector. Counts only the devices that have a

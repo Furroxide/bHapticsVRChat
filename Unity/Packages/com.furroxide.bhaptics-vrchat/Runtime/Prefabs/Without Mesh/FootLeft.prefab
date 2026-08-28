@@ -59,7 +59,7 @@ MonoBehaviour:
   allowOthers: 1
   localOnly: 0
   receiverType: 2
-  parameter: bOSC_v1_FootL_1
+  parameter: bOSC/v2/FootL/1/others
   minVelocity: 0.05
 --- !u!1 &441104470515597817
 GameObject:
@@ -120,7 +120,7 @@ MonoBehaviour:
   allowOthers: 1
   localOnly: 0
   receiverType: 2
-  parameter: bOSC_v1_FootL_2
+  parameter: bOSC/v2/FootL/2/others
   minVelocity: 0.05
 --- !u!1 &563108712393854059
 GameObject:
@@ -180,7 +180,7 @@ MonoBehaviour:
   allowOthers: 0
   localOnly: 0
   receiverType: 2
-  parameter: bOSC_v1_FootL_2
+  parameter: bOSC/v2/FootL/2/self
   minVelocity: 0.05
 --- !u!1 &2260628933453416873
 GameObject:
@@ -240,7 +240,7 @@ MonoBehaviour:
   allowOthers: 0
   localOnly: 0
   receiverType: 2
-  parameter: bOSC_v1_FootL_1
+  parameter: bOSC/v2/FootL/1/self
   minVelocity: 0.05
 --- !u!1 &4153665601531135017
 GameObject:
@@ -398,7 +398,7 @@ MonoBehaviour:
   allowOthers: 0
   localOnly: 0
   receiverType: 2
-  parameter: bOSC_v1_FootL_0
+  parameter: bOSC/v2/FootL/0/self
   minVelocity: 0.05
 --- !u!1 &8677578413776910353
 GameObject:
@@ -459,5 +459,5 @@ MonoBehaviour:
   allowOthers: 1
   localOnly: 0
   receiverType: 2
-  parameter: bOSC_v1_FootL_0
+  parameter: bOSC/v2/FootL/0/others
   minVelocity: 0.05

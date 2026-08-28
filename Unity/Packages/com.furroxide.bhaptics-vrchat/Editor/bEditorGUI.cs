@@ -470,7 +470,13 @@ namespace bHapticsOSC.VRChat
 #if bHapticsOSC_HasContactCompressor
 			if (!editorComp.ConsolidateContacts)
 			{
-				bCompressor.RemoveGroups(editorComp);
+				// Narrow, root-only removal: the ContactCompressorGroup on each planned device
+				// prefab root goes, whoever put it there, and nothing deeper in the subtree or
+				// anywhere else on the avatar is touched. The component carries no marker saying
+				// who authored it, so the guarantee here is about where this looks, not about
+				// provenance. The previous call swept the whole device subtree and took a user's
+				// own groups with it, on the default path.
+				bCompressor.RemoveGeneratedGroups(editorComp);
 				return;
 			}
 
@@ -491,9 +497,10 @@ namespace bHapticsOSC.VRChat
 
 			// Compressed receivers with no manifest is the worst of both worlds: the per-motor
 			// receivers are gone at build time and the companion app has nothing to decode the
-			// replacements with. Take back only the groups this added - a user's own groups
-			// elsewhere on the avatar are not ours to delete - and then fail loudly rather than
-			// letting the setup report success.
+			// replacements with. Undo the setup with the same narrow, root-only removal - the
+			// group on each planned device prefab root, and nothing deeper in the subtree or
+			// anywhere else on the avatar, since a user's own groups out there are not ours to
+			// delete - and then fail loudly rather than letting the setup report success.
 			bCompressor.RemoveGeneratedGroups(editorComp);
 			throw new System.InvalidOperationException(
 				$"Contact compression was applied to {applied} device(s) but no manifest could be produced, so it "
