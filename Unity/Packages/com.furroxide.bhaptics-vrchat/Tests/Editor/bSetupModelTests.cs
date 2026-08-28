@@ -181,12 +181,21 @@ namespace bHapticsOSC.VRChat.Tests
                 Assert.Ignore("The player and OSC probes only run in a Windows editor.");
 
             Assert.That(HasStep(pc, bSetupModel.StepChain), Is.False);
+            // Naming a month here is only safe because AppendConfigEvidence pins its format to the
+            // invariant culture. Were that left to the host's culture, this would fail on a French or
+            // Japanese editor over the spelling of one word, which has nothing to do with the
+            // behaviour under test - so if this line ever starts failing, check that pin first.
             Assert.That(FindStep(pc, bSetupModel.StepOsc).Explanation, Does.Contain("Aug 2026"));
         }
 
         [TestCase("Yes", "Yes", "Ok")]
+        [TestCase("Unknown", "Yes", "Ok")]
         [TestCase("Yes", "No", "Attention")]
         [TestCase("No", "No", "Blocked")]
+        [TestCase("No", "Unknown", "Blocked")]
+        [TestCase("Yes", "Unknown", "Unknown")]
+        [TestCase("Unknown", "No", "Unknown")]
+        [TestCase("Unknown", "Unknown", "Unknown")]
         public void Build_PlayerStep_ReflectsWhatWasProbed(
             string installed,
             string running,
@@ -200,6 +209,30 @@ namespace bHapticsOSC.VRChat.Tests
                 Assert.Ignore("The player and OSC probes only run in a Windows editor.");
 
             Assert.That(FindStep(pc, bSetupModel.StepPlayer).State, Is.EqualTo(State(expected)));
+        }
+
+        /// <summary>
+        /// An indeterminate probe is not a negative one. Reading the install path can throw and
+        /// enumerating processes can be refused, and in both cases the Player may be sitting there
+        /// working - so the row may assert neither that it is missing nor that it is stopped, and
+        /// it must not be counted among the problems holding the user up.
+        /// </summary>
+        [Test]
+        public void Build_PlayerStep_IndeterminateProbes_DoNotAssertItIsMissingOrStopped()
+        {
+            bSetupGroup pc = Build(
+                Companion(bCompanionStatus.ReadyRunning),
+                Environment(
+                    playerInstalled: bProbeState.Unknown,
+                    playerRunning: bProbeState.Unknown))[0];
+
+            if (!IsWindowsEditor(pc))
+                Assert.Ignore("The player and OSC probes only run in a Windows editor.");
+
+            bSetupStep player = FindStep(pc, bSetupModel.StepPlayer);
+            Assert.That(player.Detail, Does.Not.Contain("Not found"));
+            Assert.That(player.Detail, Does.Not.Contain("not running"));
+            Assert.That(player.NeedsAttention, Is.False);
         }
 
         [TestCase("Yes", "Ok")]
@@ -243,10 +276,48 @@ namespace bHapticsOSC.VRChat.Tests
             Assert.That(bSetupModel.FirstActionable(groups)?.Id, Is.EqualTo("pending"));
         }
 
+        /// <summary>
+        /// Something that could not be checked is the last thing the banner falls back to, never
+        /// something it leads with while a real problem is waiting.
+        /// </summary>
         [Test]
-        public void FirstActionable_NothingToDo_IsNull()
+        public void FirstActionable_PrefersRealProblemsOverSomethingUnchecked()
+        {
+            var groups = new[]
+            {
+                Group("a", Step("unknowable", bStepState.Unknown)),
+                Group("b", Step("pending", bStepState.Attention)),
+                Group("c", Step("broken", bStepState.Blocked)),
+            };
+
+            Assert.That(bSetupModel.FirstActionable(groups)?.Id, Is.EqualTo("broken"));
+
+            var withoutTheBlocker = new[]
+            {
+                Group("a", Step("unknowable", bStepState.Unknown)),
+                Group("b", Step("pending", bStepState.Attention)),
+            };
+
+            Assert.That(bSetupModel.FirstActionable(withoutTheBlocker)?.Id, Is.EqualTo("pending"));
+        }
+
+        /// <summary>
+        /// With nothing left to do the banner still has to say something honest, and "everything is
+        /// ready" is not available over a probe that came back empty.
+        /// </summary>
+        [Test]
+        public void FirstActionable_FallsBackToTheFirstUncheckedStep()
         {
             var groups = new[] { Group("a", Step("fine", bStepState.Ok), Step("unknowable", bStepState.Unknown)) };
+
+            Assert.That(bSetupModel.FirstActionable(groups)?.Id, Is.EqualTo("unknowable"));
+            Assert.That(bSetupModel.FirstActionable(groups)?.State, Is.EqualTo(bStepState.Unknown));
+        }
+
+        [Test]
+        public void FirstActionable_EverythingCheckedAndPassing_IsNull()
+        {
+            var groups = new[] { Group("a", Step("fine", bStepState.Ok), Step("also-fine", bStepState.Ok)) };
 
             Assert.That(bSetupModel.FirstActionable(groups), Is.Null);
         }
@@ -257,18 +328,63 @@ namespace bHapticsOSC.VRChat.Tests
         [TestCase("Blocked", "Ok", "1 problem")]
         [TestCase("Blocked", "Blocked", "2 problems")]
         [TestCase("Blocked", "Attention", "1 problem")]
-        public void DescribeOverall_CountsWhatIsWrong(string first, string second, string expected)
+        [TestCase("Ok", "Unknown", "1 not checked")]
+        [TestCase("Unknown", "Unknown", "2 not checked")]
+        [TestCase("Attention", "Unknown", "1 thing to do")]
+        [TestCase("Blocked", "Unknown", "1 problem")]
+        public void DescribeOverall_ReportsTheWorstThingItFound(string first, string second, string expected)
         {
             var groups = new[] { Group("a", Step("one", State(first)), Step("two", State(second))) };
 
             Assert.That(bSetupModel.DescribeOverall(groups), Is.EqualTo(expected));
         }
 
+        /// <summary>
+        /// A clean group folds itself shut behind an "all set" header, so clean has to mean every
+        /// step in it was checked and passed. Hiding a step whose probe came back empty would show
+        /// a check that never ran as one that did.
+        /// </summary>
         [Test]
-        public void Group_IsCleanOnlyWhenNothingNeedsAttention()
+        public void Group_IsCleanOnlyWhenEveryStepWasCheckedAndPassed()
         {
-            Assert.That(Group("a", Step("one", bStepState.Ok), Step("two", bStepState.Unknown)).IsClean, Is.True);
+            Assert.That(Group("a", Step("one", bStepState.Ok), Step("two", bStepState.Ok)).IsClean, Is.True);
+            Assert.That(Group("a", Step("one", bStepState.Ok), Step("two", bStepState.Unknown)).IsClean, Is.False);
             Assert.That(Group("a", Step("one", bStepState.Ok), Step("two", bStepState.Attention)).IsClean, Is.False);
+            Assert.That(Group("a", Step("one", bStepState.Ok), Step("two", bStepState.Blocked)).IsClean, Is.False);
+        }
+
+        /// <summary>
+        /// Unknown sits between the two predicates rather than under either: it asks nothing of the
+        /// user, so the row stays a quiet single line, but it was never verified, so nothing may
+        /// count it as a pass. Collapsing these back into one predicate is what the panel used to
+        /// do, and it is what let a group of unread checks call itself "all set".
+        /// </summary>
+        [TestCase("Ok", false, true)]
+        [TestCase("Unknown", false, false)]
+        [TestCase("Attention", true, false)]
+        [TestCase("Blocked", true, false)]
+        public void Step_NeedsAttentionAndIsSatisfiedAreNotOpposites(
+            string state,
+            bool needsAttention,
+            bool isSatisfied)
+        {
+            bSetupStep step = Step("s", State(state));
+
+            Assert.That(step.NeedsAttention, Is.EqualTo(needsAttention));
+            Assert.That(step.IsSatisfied, Is.EqualTo(isSatisfied));
+        }
+
+        [Test]
+        public void CountUnchecked_CountsEveryStepThatCouldNotBeRead()
+        {
+            var groups = new[]
+            {
+                Group("a", Step("one", bStepState.Ok), Step("two", bStepState.Unknown)),
+                Group("b", Step("three", bStepState.Unknown), Step("four", bStepState.Blocked)),
+            };
+
+            Assert.That(bSetupModel.CountUnchecked(groups), Is.EqualTo(2));
+            Assert.That(bSetupModel.CountUnchecked(null), Is.EqualTo(0));
         }
 
         [Test]

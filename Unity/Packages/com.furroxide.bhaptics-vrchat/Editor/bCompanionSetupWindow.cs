@@ -48,6 +48,26 @@ namespace bHapticsOSC.VRChat
         private readonly Dictionary<string, Button> optionButtons = new Dictionary<string, Button>();
 
         /// <summary>
+        /// The installer phase the window last drew. It exists because bCompanionInstaller is a
+        /// static pump with nothing to subscribe to: comparing its phase against what is on screen
+        /// is the only way to notice that a download has finished, failed or been cancelled.
+        /// Everything gated on IsBusy goes stale on that transition - the banner's primary action,
+        /// the secondary option buttons, and the whole terminal panel that replaces the progress
+        /// bar - so a change here asks for a rebuild rather than a repaint of the bar alone.
+        /// </summary>
+        private bCompanionInstaller.bInstallPhase renderedInstallerPhase = bCompanionInstaller.bInstallPhase.Idle;
+
+        /// <summary>
+        /// The live progress bar and its Cancel button, held so the busy panel is built once per
+        /// phase and only updated afterwards. UI Toolkit delivers a click to the same element
+        /// instance that captured the pointer down, so replacing these on every editor update -
+        /// which is how often a download refreshes - would quietly eat the click that was meant to
+        /// cancel it.
+        /// </summary>
+        private ProgressBar installerProgress;
+        private Button installerCancel;
+
+        /// <summary>
         /// Set while the window is being opened by something other than the user, so the
         /// automatic disk search never runs behind an unasked-for window.
         /// </summary>
@@ -97,6 +117,11 @@ namespace bHapticsOSC.VRChat
             ConsumeAvatarSetupCompleteFlag();
             Recheck();
             ScheduleAutoLocate();
+
+            // Subtracted before it is added, for the reason bCompanionInstaller does the same
+            // around its own pump: a second subscription would outlive the single unsubscribe in
+            // OnDisable and leave the phase comparison running twice per update.
+            EditorApplication.update -= OnEditorUpdate;
             EditorApplication.update += OnEditorUpdate;
         }
 
@@ -104,6 +129,15 @@ namespace bHapticsOSC.VRChat
         {
             EditorApplication.update -= OnEditorUpdate;
             avatarSetupJustCompleted = false;
+
+            // The visual tree does not survive being disabled, so nothing that points into it may
+            // either. Dropping the phase back to Idle alongside the references is what lets a
+            // second install in the same session draw at all: a window re-enabled still believing
+            // it had rendered Downloading would see no change on the next update and would never
+            // build the panel these fields are meant to hold.
+            installerProgress = null;
+            installerCancel = null;
+            renderedInstallerPhase = bCompanionInstaller.bInstallPhase.Idle;
         }
 
         private void OnFocus() => Recheck();
@@ -114,11 +148,27 @@ namespace bHapticsOSC.VRChat
         /// <summary>
         /// Only the installer needs a clock. Everything else on this window is repainted by the
         /// events that change it, which is the point of moving off an every-frame OnGUI.
+        ///
+        /// Two different jobs, deliberately kept apart. A phase change is a change to the whole
+        /// window - the banner's action and the secondary options are all disabled while the
+        /// installer is busy, and the Done or Failed panel only exists on the structural path - so
+        /// it asks for a full rebuild. Watching for that here, rather than only while busy, is what
+        /// makes the finished state appear at all: the pump leaves IsBusy false the moment it is
+        /// done, and a condition that only looked while busy stopped looking on exactly that frame,
+        /// leaving a completed download drawn as a progress bar until something else happened to
+        /// refocus the window. Every other tick only moves the bar, and must not touch the
+        /// hierarchy the user is trying to click.
         /// </summary>
         private void OnEditorUpdate()
         {
+            if (bCompanionInstaller.Phase != renderedInstallerPhase)
+            {
+                Rebuild();
+                return;
+            }
+
             if (bCompanionInstaller.IsBusy)
-                RefreshInstaller();
+                UpdateInstallerProgress();
         }
 
         // ------------------------------------------------------------------ construction
@@ -148,8 +198,14 @@ namespace bHapticsOSC.VRChat
 
         private void BindChrome(VisualElement root)
         {
-            // CloneTree made a fresh set of buttons; the old entries point at orphans.
+            // CloneTree made a fresh set of buttons; the old entries point at orphans. The
+            // installer's progress bar and Cancel button are cached for the same reason and are
+            // just as orphaned, and the phase has to be forgotten with them so the RefreshInstaller
+            // that follows treats this as a transition and rebuilds into the new tree.
             optionButtons.Clear();
+            installerProgress = null;
+            installerCancel = null;
+            renderedInstallerPhase = bCompanionInstaller.bInstallPhase.Idle;
 
             headerIcon = root.Q<VisualElement>("header-icon");
             headerPill = root.Q<Label>("header-pill");
@@ -261,6 +317,10 @@ namespace bHapticsOSC.VRChat
         /// The single next thing, promoted above everything that merely wants reading. When there
         /// is nothing to do the banner shrinks to one green line rather than disappearing - an
         /// empty space would not say "you are done".
+        ///
+        /// The third case is nothing to do but something that could not be checked, and it gets
+        /// its own wording: a green "everything is ready" over a probe that came back empty is a
+        /// claim the window is in no position to make.
         /// </summary>
         private void RefreshBanner(IReadOnlyList<bSetupGroup> groups)
         {
@@ -284,6 +344,27 @@ namespace bHapticsOSC.VRChat
             bSetupStep step = next.Value;
             bUI.SetStateClass(bannerRoot, "b-banner", step.State);
             SetMarker(bannerIcon, step.State);
+
+            // Something that could not be checked is reported, never promoted. Naming the one step
+            // and putting its button in the banner would read as "you must fix this", when all the
+            // window knows is that it could not look. Nothing becomes unreachable by doing it this
+            // way: an unchecked step now keeps its group open, so whatever that row offers is
+            // already on screen underneath.
+            if (step.State == bStepState.Unknown)
+            {
+                int notChecked = bSetupModel.CountUnchecked(groups);
+                string tail = notChecked == 1
+                    ? "1 check could not be run"
+                    : notChecked + " checks could not be run";
+                bannerTitle.text = avatarSetupJustCompleted
+                    ? "Avatar setup complete - " + tail
+                    : "Nothing left to do - " + tail;
+                bannerDetail.text = step.Detail;
+                Display(bannerDetail, !string.IsNullOrEmpty(step.Detail));
+                Display(bannerAction, false);
+                return;
+            }
+
             bannerTitle.text = step.Title;
             bannerDetail.text = step.Detail;
             Display(bannerDetail, !string.IsNullOrEmpty(step.Detail));
@@ -330,13 +411,46 @@ namespace bHapticsOSC.VRChat
             toastRoot.Add(new HelpBox(actionMessage, ToHelpBoxType(actionMessageState)));
         }
 
+        /// <summary>
+        /// The structural pass, and the one place that records which phase is on screen. It stamps
+        /// that before the early return on purpose: a window whose layout failed to load would
+        /// otherwise report a phase change on every editor update for as long as it stayed open.
+        /// </summary>
         private void RefreshInstaller()
         {
+            bCompanionInstaller.bInstallPhase phase = bCompanionInstaller.Phase;
+            bool phaseChanged = phase != renderedInstallerPhase;
+            renderedInstallerPhase = phase;
+
             if (installerRoot == null)
                 return;
 
+            if (bCompanionInstaller.IsBusy)
+            {
+                Display(installerRoot, true);
+
+                // Kept across every tick of one phase. The parent check covers what the phase
+                // cannot: CreateGUI clones a new tree, and the cached bar would then be an orphan
+                // that is updated forever without ever being seen.
+                if (phaseChanged
+                    || installerProgress == null
+                    || installerCancel == null
+                    || installerProgress.parent != installerRoot)
+                {
+                    BuildBusyInstaller();
+                }
+
+                UpdateInstallerProgress();
+                return;
+            }
+
+            // Nothing below is reused, so the cached references are dropped before the clear
+            // rather than left pointing at elements that have been removed.
+            installerProgress = null;
+            installerCancel = null;
             installerRoot.Clear();
-            if (bCompanionInstaller.Phase == bCompanionInstaller.bInstallPhase.Idle)
+
+            if (phase == bCompanionInstaller.bInstallPhase.Idle)
             {
                 Display(installerRoot, false);
                 return;
@@ -344,26 +458,7 @@ namespace bHapticsOSC.VRChat
 
             Display(installerRoot, true);
 
-            if (bCompanionInstaller.IsBusy)
-            {
-                var bar = new ProgressBar
-                {
-                    lowValue = 0f,
-                    highValue = 1f,
-                    value = bCompanionInstaller.Progress,
-                    title = bCompanionInstaller.Message,
-                };
-                installerRoot.Add(bar);
-                installerRoot.Add(new Button(() =>
-                {
-                    bCompanionInstaller.Cancel();
-                    RefreshInstaller();
-                })
-                { text = "Cancel" });
-                return;
-            }
-
-            bool failed = bCompanionInstaller.Phase == bCompanionInstaller.bInstallPhase.Failed;
+            bool failed = phase == bCompanionInstaller.bInstallPhase.Failed;
             installerRoot.Add(new HelpBox(
                 bCompanionInstaller.Message,
                 failed ? HelpBoxMessageType.Warning : HelpBoxMessageType.Info));
@@ -389,6 +484,47 @@ namespace bHapticsOSC.VRChat
             { text = "Dismiss" });
 
             installerRoot.Add(row);
+        }
+
+        /// <summary>
+        /// Built when the installer enters a busy phase, not once per frame. Cancel ends the
+        /// download, which un-busies everything the window disabled on the way in, so it goes
+        /// through Rebuild rather than refreshing this panel on its own.
+        /// </summary>
+        private void BuildBusyInstaller()
+        {
+            installerRoot.Clear();
+
+            installerProgress = new ProgressBar
+            {
+                lowValue = 0f,
+                highValue = 1f,
+                value = bCompanionInstaller.Progress,
+                title = bCompanionInstaller.Message,
+            };
+            installerRoot.Add(installerProgress);
+
+            installerCancel = new Button(() =>
+            {
+                bCompanionInstaller.Cancel();
+                Rebuild();
+            })
+            { text = "Cancel" };
+            installerRoot.Add(installerCancel);
+        }
+
+        /// <summary>
+        /// The per-tick pass, and the whole reason the busy panel is cached: it may write to the
+        /// bar and nothing else. Adding or removing anything here would put a download back to
+        /// replacing the Cancel button underneath the pointer that is trying to press it.
+        /// </summary>
+        private void UpdateInstallerProgress()
+        {
+            if (installerProgress == null)
+                return;
+
+            installerProgress.value = bCompanionInstaller.Progress;
+            installerProgress.title = bCompanionInstaller.Message;
         }
 
         /// <summary>

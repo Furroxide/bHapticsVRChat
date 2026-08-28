@@ -29,6 +29,15 @@ namespace bHapticsOSC.VRChat
         private string autoFitMessage;
         private bStepState autoFitState = bStepState.Ok;
 
+        // Set while a panel rebuild is waiting for the event that asked for it to finish
+        // dispatching. See DeferDeviceSetChanged.
+        private bool deviceSetChangePending;
+
+        // Set while a rebuild driven by an undo or by a hierarchy change is running. Rebuilding is
+        // not purely a read - see RebuildFromExternalChange - so it can provoke the very
+        // notification that started it, and this keeps that from starting a second one on top.
+        private bool rebuilding;
+
         public override VisualElement CreateInspectorGUI()
         {
             editorComp = (bHapticsOSCIntegration)target;
@@ -40,6 +49,51 @@ namespace bHapticsOSC.VRChat
         }
 
         /// <summary>
+        /// The IMGUI inspector this replaced re-read the scene on every repaint, so an undo, a
+        /// redo, or a device object deleted from the Hierarchy window corrected the panel by
+        /// itself on the next frame. A UI Toolkit tree is built once and then left alone, so the
+        /// same events have to be listened for explicitly - without this the panel goes on
+        /// offering "Remove device" for a device the user has just undone, until they think to
+        /// reselect the avatar.
+        /// </summary>
+        private void OnEnable()
+        {
+            Undo.undoRedoPerformed += RebuildFromExternalChange;
+            EditorApplication.hierarchyChanged += RebuildFromExternalChange;
+        }
+
+        private void OnDisable()
+        {
+            Undo.undoRedoPerformed -= RebuildFromExternalChange;
+            EditorApplication.hierarchyChanged -= RebuildFromExternalChange;
+        }
+
+        /// <summary>
+        /// The two subscriptions above come through here rather than going straight to Rebuild.
+        ///
+        /// A rebuild is not purely a read: it validates the component, which repairs the
+        /// generated-asset key when that is missing and records an undo step to do it. Recording
+        /// an undo step does not raise undoRedoPerformed, so that path cannot feed back on itself,
+        /// but exactly which edits raise hierarchyChanged is not something worth relying on. The
+        /// flag keeps a rebuild that causes a notification from being re-entered by it.
+        /// </summary>
+        private void RebuildFromExternalChange()
+        {
+            if (rebuilding)
+                return;
+
+            rebuilding = true;
+            try
+            {
+                Rebuild();
+            }
+            finally
+            {
+                rebuilding = false;
+            }
+        }
+
+        /// <summary>
         /// Rebuilds the whole panel. Cheap enough to do on every change, and it keeps the tree a
         /// pure function of the component's state rather than something that has to be patched in
         /// the right order after each edit.
@@ -47,6 +101,14 @@ namespace bHapticsOSC.VRChat
         private void Rebuild()
         {
             if (root == null)
+                return;
+
+            // Undo and the hierarchy notification also arrive for the edits that destroy the
+            // component itself - undoing the drag that added it, or the Setup Assistant moving it
+            // to the avatar root - and this editor is still alive, holding a destroyed target,
+            // when they do. Everything below dereferences the component, so there is nothing left
+            // to draw.
+            if (editorComp == null)
                 return;
 
             root.Clear();
@@ -92,6 +154,39 @@ namespace bHapticsOSC.VRChat
             MarkSceneDirty();
         }
 
+        /// <summary>
+        /// The same thing, but after the event that asked for it has finished dispatching.
+        ///
+        /// A field's change callback runs partway through that field's own event. Rebuilding the
+        /// panel from inside one tears the field out of the hierarchy while the rest of the
+        /// propagation path is still walking it, and the keyboard focus goes with it. The buttons
+        /// in this panel get away with rebuilding themselves because a click is over by the time
+        /// the handler runs; a Toggle reporting a value change is not. Waiting one panel tick lets
+        /// the toggle finish reporting before the element it lives in is replaced.
+        ///
+        /// The flag collapses a burst of changes into a single rebuild, and scheduling on the root
+        /// rather than through EditorApplication.delayCall means an inspector that is closed before
+        /// the tick arrives simply never runs it.
+        /// </summary>
+        private void DeferDeviceSetChanged()
+        {
+            if (root == null || deviceSetChangePending)
+                return;
+
+            deviceSetChangePending = true;
+            root.schedule.Execute(() =>
+            {
+                deviceSetChangePending = false;
+
+                // The setup pipeline destroys the component on success, and the panel can outlive
+                // it by a tick.
+                if (editorComp == null)
+                    return;
+
+                OnDeviceSetChanged();
+            });
+        }
+
         // ------------------------------------------------------------------ companion strip
 
         /// <summary>
@@ -118,7 +213,8 @@ namespace bHapticsOSC.VRChat
                     step.Value,
                     step.Detail,
                     step.Explanation,
-                    new bStepAction("Setup Assistant", bCompanionSetupWindow.ShowWindow, true)));
+                    new bStepAction("Setup Assistant", bCompanionSetupWindow.ShowWindow, true),
+                    new bStepAction("Recheck", RecheckCompanion)));
                 companionStrip.Add(card);
 
                 if (status.HasConflictingProcess)
@@ -150,8 +246,28 @@ namespace bHapticsOSC.VRChat
             button.AddToClassList("b-companion-strip__button");
             strip.Add(button);
 
+            var recheck = new Button(RecheckCompanion) { text = "Recheck" };
+            recheck.AddToClassList("b-companion-strip__button");
+            strip.Add(recheck);
+
             companionStrip.Add(strip);
             return companionStrip;
+        }
+
+        /// <summary>
+        /// Drops the cached probe result and redraws the panel.
+        ///
+        /// The detector only goes back to the filesystem and the process list once its short-lived
+        /// cache has expired, and this inspector builds its tree once and is then left alone - so
+        /// after the user installs the companion app or starts it, nothing here notices until some
+        /// unrelated edit happens to rebuild the panel. Recheck is the user saying "look again now",
+        /// which is why it has to invalidate first: rebuilding on its own would only redraw the
+        /// answer the detector already had.
+        /// </summary>
+        private void RecheckCompanion()
+        {
+            bCompanionStatusDetector.InvalidateCache();
+            Rebuild();
         }
 
         // ------------------------------------------------------------------ placement problems
@@ -253,6 +369,15 @@ namespace bHapticsOSC.VRChat
             {
                 var reset = new Button(() =>
                 {
+                    // Reset() destroys the prefab through Undo but clears the tag list, the
+                    // touch-view colours and the mesh flags on the settings object outside it.
+                    // Snapshotting the settings first keeps both halves in the one undo step, so
+                    // Ctrl+Z cannot bring the device object back while the settings still say
+                    // there is none. bGUI's DrawHeaderButton did this before the panel moved to
+                    // UI Toolkit.
+                    Undo.RegisterCompleteObjectUndo(
+                        settings,
+                        $"[{bHapticsOSCIntegration.SystemName}] Clicked Reset");
                     settings.Reset();
                     OnDeviceSetChanged();
                 })
@@ -320,7 +445,13 @@ namespace bHapticsOSC.VRChat
             {
                 Undo.RecordObject(settings, $"[{bHapticsOSCIntegration.SystemName}] Toggled Show Mesh");
                 settings.ShowMesh = evt.newValue;
-                MarkSceneDirty();
+
+                // Not merely a dirty flag. The setter swaps this device for the other prefab
+                // variant, and the two do not carry the same receivers - the head is 12 without the
+                // mesh and 8 with it - so the compression estimate below describes the prefab that
+                // has just been destroyed until the panel is rebuilt. OnDeviceSetChanged marks the
+                // scene dirty itself, which is why that call is gone from here.
+                DeferDeviceSetChanged();
             });
             host.Add(showMesh);
 
@@ -467,6 +598,14 @@ namespace bHapticsOSC.VRChat
             row.Add(new Button(settings.SelectCurrentPrefab) { text = "Select in scene" });
             row.Add(new Button(() =>
             {
+                // DestroyCurrentPrefab() destroys the prefab through Undo and then clears
+                // CurrentPrefab, the custom tags and the touch-view colours on the settings object
+                // without recording any of it. Snapshotting the settings first keeps the scene and
+                // the settings on the same side of a Ctrl+Z, the way bGUI's DrawButton did before
+                // the panel moved to UI Toolkit.
+                Undo.RegisterCompleteObjectUndo(
+                    settings,
+                    $"[{bHapticsOSCIntegration.SystemName}] Clicked Remove device");
                 settings.DestroyCurrentPrefab();
                 OnDeviceSetChanged();
             })
@@ -499,35 +638,64 @@ namespace bHapticsOSC.VRChat
             row.AddToClassList("b-toggle-row");
 
             var toggle = new Toggle("Consolidate contact receivers") { value = editorComp.ConsolidateContacts };
-            toggle.SetEnabled(before > 0);
             row.Add(toggle);
 
             var note = new Label();
             note.AddToClassList("b-inline-note");
             row.Add(note);
 
-            if (before > 0)
+            // Everything that reads off the toggle's own value, gathered so the change callback can
+            // bring the row up to date by rewriting a label and two tooltips. Rebuilding the row
+            // instead would destroy this toggle from inside this toggle's own callback, and the
+            // estimate a rebuild would recompute cannot have moved: nothing on this row changes
+            // which prefabs are in the scene.
+            void SyncRow(bool consolidating)
             {
-                note.text = "· " + before + " → " + after;
-                toggle.tooltip =
-                    "Vest, head and arm receivers become " + after + " instead of " + before + " at build "
-                    + "time. The companion app decodes the touch position, so contact spreads smoothly "
-                    + "across neighbouring motors. Export the manifest from a Contact Compressor Group "
-                    + "into the app's Config folder.";
-            }
-            else
-            {
-                // Silence here used to read as "this worked". Say plainly that there is nothing to
-                // compress, so the toggle being on is not mistaken for the feature being active.
-                // Deliberately does not guess why: it is equally reached by a hands-only setup and
-                // by a Quest one, and naming the wrong cause is worse than naming none.
-                note.text = "· nothing to consolidate";
-                toggle.tooltip =
-                    "This applies to the vest, head and forearm devices on the desktop prefabs. None of "
-                    + "the currently selected devices use it, so they are left as they are.";
+                // Live whenever there is something to compress, and also whenever it is already on.
+                // A setup that had compressible devices and then lost them - the vest removed, or
+                // the desktop prefabs swapped for the Quest ones, which match no plan - would
+                // otherwise leave the setting switched on behind a control the user can no longer
+                // reach to switch it back off.
+                toggle.SetEnabled(before > 0 || consolidating);
+
+                if (before > 0)
+                {
+                    note.text = "· " + before + " → " + after;
+                    toggle.tooltip = consolidating
+                        ? "Vest, head and arm receivers become " + after + " instead of " + before + " at build "
+                          + "time. The companion app decodes the touch position, so contact spreads smoothly "
+                          + "across neighbouring motors. Export the manifest from a Contact Compressor Group "
+                          + "into the app's Config folder."
+                        : "Currently " + before + " contact receivers across the vest, head and arms. "
+                          + "Consolidating would make it " + after + " at build time.";
+                }
+                else if (consolidating)
+                {
+                    // On, with nothing to apply it to. Silence here would read as "this worked", and
+                    // the setting lives on the component rather than on the devices, so it outlives
+                    // whatever justified switching it on - swapping the vest for its Quest prefab
+                    // lands exactly here.
+                    note.text = "· on, nothing to consolidate";
+                    toggle.tooltip =
+                        "None of the currently selected devices can be consolidated, so this changes nothing "
+                        + "at build time. It stays on, and applies again if a desktop vest, head or forearm "
+                        + "device is added.";
+                }
+                else
+                {
+                    // Deliberately does not guess why there is nothing to do: it is equally reached
+                    // by a hands-only setup and by a Quest one, and naming the wrong cause is worse
+                    // than naming none.
+                    note.text = "· nothing to consolidate";
+                    toggle.tooltip =
+                        "This applies to the vest, head and forearm devices on the desktop prefabs. None of "
+                        + "the currently selected devices use it, so they are left as they are.";
+                }
+
+                note.tooltip = toggle.tooltip;
             }
 
-            note.tooltip = toggle.tooltip;
+            SyncRow(editorComp.ConsolidateContacts);
 
             toggle.RegisterValueChangedCallback(evt =>
             {
@@ -535,6 +703,7 @@ namespace bHapticsOSC.VRChat
                     editorComp,
                     $"[{bHapticsOSCIntegration.SystemName}] Toggled Consolidate contact receivers");
                 editorComp.ConsolidateContacts = evt.newValue;
+                SyncRow(evt.newValue);
                 MarkSceneDirty();
             });
 

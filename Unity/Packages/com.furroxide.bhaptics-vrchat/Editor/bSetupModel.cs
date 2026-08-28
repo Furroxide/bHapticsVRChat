@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 using PackageInfo = UnityEditor.PackageManager.PackageInfo;
 
@@ -90,10 +91,28 @@ namespace bHapticsOSC.VRChat
 
         internal bStepAction[] Actions { get; }
 
+        /// <summary>
+        /// Whether this step is asking the user for something. This is the predicate that decides
+        /// how loud a row is drawn - a step that needs attention opens into a tinted card with its
+        /// sentence and its buttons, anything else stays a single quiet line - so Unknown is
+        /// deliberately left out of it. "We could not check this" is not a fault to shout about,
+        /// and folding it in here would also throw away the one useful thing those rows carry,
+        /// because only a row that needs nothing shows its <see cref="Value"/>.
+        /// </summary>
         internal bool NeedsAttention => State == bStepState.Attention || State == bStepState.Blocked;
+
+        /// <summary>
+        /// Whether this step was actually checked and came back fine.
+        ///
+        /// This is deliberately not the negation of <see cref="NeedsAttention"/>, and the gap
+        /// between them is the whole point: an Unknown step asks nothing of the user, so it stays
+        /// quiet, but it was never verified either, so nothing may count it towards a group or a
+        /// summary claiming that everything is in order.
+        /// </summary>
+        internal bool IsSatisfied => State == bStepState.Ok;
     }
 
-    /// <summary>A titled run of steps. Collapses to its header when nothing in it needs attention.</summary>
+    /// <summary>A titled run of steps. Collapses to its header once every step in it has passed.</summary>
     internal sealed class bSetupGroup
     {
         internal bSetupGroup(string id, string title, IReadOnlyList<bSetupStep> steps)
@@ -107,13 +126,21 @@ namespace bHapticsOSC.VRChat
         internal string Title { get; }
         internal IReadOnlyList<bSetupStep> Steps { get; }
 
+        /// <summary>
+        /// True only when every step in the group was checked and came back fine. This drives the
+        /// automatic collapse, so it asks about <see cref="bSetupStep.IsSatisfied"/> rather than
+        /// about <see cref="bSetupStep.NeedsAttention"/>: a step whose probe came back empty is
+        /// not asking for anything, but folding it away behind an "all set" header would present a
+        /// check that never ran as one that passed. An empty group stays clean - there is nothing
+        /// in it to be unsure about, and it is not drawn at all.
+        /// </summary>
         internal bool IsClean
         {
             get
             {
                 foreach (bSetupStep step in Steps)
                 {
-                    if (step.NeedsAttention)
+                    if (!step.IsSatisfied)
                         return false;
                 }
 
@@ -232,8 +259,14 @@ namespace bHapticsOSC.VRChat
         }
 
         /// <summary>
-        /// The single step the header banner promotes: the first blocking one, or failing that the
-        /// first that merely needs attention. Groups are already in urgency order, so first wins.
+        /// The single step the header banner leads with: the first blocking one, or failing that
+        /// the first that merely needs attention. Groups are already in urgency order, so first
+        /// wins.
+        ///
+        /// Only when there is neither does it fall back to the first step that could not be
+        /// checked, so that the banner is not left declaring everything ready over a probe that
+        /// came back empty. That last one is a report and not a task, and the banner is expected
+        /// to look at the state it got back before wording it as something to go and do.
         /// </summary>
         internal static bSetupStep? FirstActionable(IReadOnlyList<bSetupGroup> groups)
         {
@@ -241,6 +274,7 @@ namespace bHapticsOSC.VRChat
                 return null;
 
             bSetupStep? firstAttention = null;
+            bSetupStep? firstUnchecked = null;
             foreach (bSetupGroup group in groups)
             {
                 foreach (bSetupStep step in group.Steps)
@@ -250,10 +284,13 @@ namespace bHapticsOSC.VRChat
 
                     if (step.State == bStepState.Attention && firstAttention == null)
                         firstAttention = step;
+
+                    if (step.State == bStepState.Unknown && firstUnchecked == null)
+                        firstUnchecked = step;
                 }
             }
 
-            return firstAttention;
+            return firstAttention ?? firstUnchecked;
         }
 
         /// <summary>A short phrase for the header pill, in place of the standing intro paragraph.</summary>
@@ -281,7 +318,39 @@ namespace bHapticsOSC.VRChat
             if (attention > 0)
                 return attention == 1 ? "1 thing to do" : attention + " things to do";
 
+            // Nothing is asking for anything, but a check that never ran is not a check that
+            // passed, and "Ready to play" printed over an unread OSC setting is how a silent
+            // no-haptics session begins. It is reported as a bare count rather than as a problem,
+            // and the pill's colour comes from WorstState, so this stays grey rather than turning
+            // amber - the user is being told what is not known, not handed a job.
+            int notChecked = CountUnchecked(groups);
+            if (notChecked > 0)
+                return notChecked == 1 ? "1 not checked" : notChecked + " not checked";
+
             return "Ready to play";
+        }
+
+        /// <summary>
+        /// How many steps could not be checked at all. Unknown is nothing to fix, but it is not a
+        /// pass either, so every surface that would otherwise announce an all-clear reports this
+        /// count instead of quietly rounding it down to "fine".
+        /// </summary>
+        internal static int CountUnchecked(IReadOnlyList<bSetupGroup> groups)
+        {
+            int count = 0;
+            if (groups == null)
+                return count;
+
+            foreach (bSetupGroup group in groups)
+            {
+                foreach (bSetupStep step in group.Steps)
+                {
+                    if (step.State == bStepState.Unknown)
+                        count++;
+                }
+            }
+
+            return count;
         }
 
         // ------------------------------------------------------------------ on your PC
@@ -531,7 +600,8 @@ namespace bHapticsOSC.VRChat
                     "Running and serving on its SDK port. " + pairing);
             }
 
-            if (environment.PlayerInstalled == bProbeState.Yes)
+            if (environment.PlayerInstalled == bProbeState.Yes
+                && environment.PlayerRunning == bProbeState.No)
             {
                 return new bSetupStep(
                     StepPlayer,
@@ -543,14 +613,51 @@ namespace bHapticsOSC.VRChat
                     + "it. " + pairing);
             }
 
+            // The running probe watches for a listener on the SDK port and falls back to enumerating
+            // processes, and both of those can be refused rather than answered - most often when the
+            // Player was started elevated and Unity was not. That leaves the install known and the
+            // liveness unknown, which is not the same as stopped, and telling someone to start an app
+            // they are looking at is how a status panel loses their trust.
+            if (environment.PlayerInstalled == bProbeState.Yes)
+            {
+                return new bSetupStep(
+                    StepPlayer,
+                    title,
+                    bStepState.Unknown,
+                    "Installed",
+                    "Whether it is running could not be checked.",
+                    "It is installed on this PC, but this editor could not tell whether it is running. "
+                    + "Start it before playing if it is not already up - nothing reaches your gear "
+                    + "without it. " + pairing);
+            }
+
+            if (environment.PlayerInstalled == bProbeState.No)
+            {
+                return new bSetupStep(
+                    StepPlayer,
+                    title,
+                    bStepState.Blocked,
+                    null,
+                    "Not found on this PC.",
+                    "This is bHaptics' own app, and it is what actually drives your gear. The companion "
+                    + "app talks to it; without it nothing reaches your devices.",
+                    new bStepAction("Get bHaptics Player", actions.OpenPlayerDownloads, true));
+            }
+
+            // Nothing came back either way: reading the install path threw instead of reporting a
+            // missing file, so the Player may well be sitting there working. Blocked is reserved for
+            // a probe that actually said no, because a red row telling a user to install software
+            // they already have is worse than admitting the check did not happen. The download stays
+            // on offer for the case where it really is absent.
             return new bSetupStep(
                 StepPlayer,
                 title,
-                bStepState.Blocked,
-                null,
-                "Not found on this PC.",
-                "This is bHaptics' own app, and it is what actually drives your gear. The companion app "
-                + "talks to it; without it nothing reaches your devices.",
+                bStepState.Unknown,
+                "Could not be read",
+                "Whether it is installed could not be checked.",
+                "This editor could not read whether bHaptics Player is on this PC, so it may already be "
+                + "here. It is bHaptics' own app, and it is what actually drives your gear - the "
+                + "companion app talks to it, and without it nothing reaches your devices.",
                 new bStepAction("Get bHaptics Player", actions.OpenPlayerDownloads, true));
         }
 
@@ -599,6 +706,13 @@ namespace bHapticsOSC.VRChat
         /// <summary>
         /// Adds what VRChat's own files show, when they show something short of the full chain.
         /// The positive case is promoted to its own step instead, so it is not buried here.
+        ///
+        /// The date is formatted against the invariant culture deliberately. The day-month-year order
+        /// is already fixed by the format string, so deferring to the host's culture would not give a
+        /// French or Japanese user the layout they actually expect - it would only substitute that
+        /// culture's month name into a sentence that stays English either way, which reads worse than
+        /// leaving it English. Pinning it also keeps the wording assertable in a test, rather than
+        /// leaving the result to whichever locale the runner happens to boot with.
         /// </summary>
         private static string AppendConfigEvidence(bEnvironment environment, string lead)
         {
@@ -606,7 +720,7 @@ namespace bHapticsOSC.VRChat
                 return lead;
 
             return lead + "\n\nVRChat last saved an OSC config on "
-                        + environment.OscConfigWritten.ToString("d MMM yyyy")
+                        + environment.OscConfigWritten.ToString("d MMM yyyy", CultureInfo.InvariantCulture)
                         + ", but none of the recent ones carry this package's haptic parameters yet.";
         }
 

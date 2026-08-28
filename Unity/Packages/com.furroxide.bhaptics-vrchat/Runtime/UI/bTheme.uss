@@ -13,6 +13,20 @@
     flex-grow: 1;
 }
 
+/* The window is a header over a scrolling body, and neither half of that falls out of the
+   defaults. A ScrollView does not claim the space its parent has left over, so with no flex-grow
+   it is laid out at the height of its own content - which is exactly the case where it was
+   supposed to start scrolling, and instead the rows past the bottom of the window cannot be
+   reached at all. At the 460x560 minimum size ApplyChrome sets, with the groups expanded, that is
+   the ordinary case and not an edge one. min-height is the usual flexbox companion: a flex item
+   will not shrink below its own content unless it is told it may, and a ScrollView that cannot be
+   made shorter than its content never has anything to scroll. */
+#body {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-height: 0;
+}
+
 .b-theme--dark {
     --b-ok: rgb(122, 186, 126);
     --b-attention: rgb(226, 170, 74);
@@ -37,12 +51,17 @@
 
 /* ------------------------------------------------------------------ header */
 
+/* The header keeps its height whatever else is going on: the body below it is the part that is
+   meant to give, and without this the header is an equally shrinkable flex item, so a panel with
+   more in it than there is room for squeezes the title and the Recheck button rather than
+   scrolling. */
 .b-header {
     flex-direction: row;
     align-items: center;
     padding: 8px 10px;
     border-bottom-width: 1px;
     border-bottom-color: var(--b-hairline);
+    flex-shrink: 0;
 }
 
 .b-header__icon {
