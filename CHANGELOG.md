@@ -1,5 +1,49 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- Per-node touch on the desktop **Without Mesh** device column, which never reached the hardware.
+  Every receiver in that column was named `bOSC_v1_VestBack_0`, while the companion app subscribes
+  to `bOSC/v2/VestBack/0/self` and to a legacy `bHapticsOSC_Vest_Back_1` form. It matched neither,
+  and unmatched OSC addresses are dropped without a log line, so an avatar built from this column
+  felt punch impacts - those receivers are named separately - and nothing at all from being
+  touched. All 140 parameters now use the v2 scheme, splitting self from others to match the
+  `allowSelf` and `allowOthers` already set on each receiver.
+- The setup pipeline destroying contact-compressor groups a user had placed by hand. The cleanup
+  it ran on the default path swept the whole device subtree rather than the groups it had created,
+  so an ordinary `CREATE VRCFURY SETUP` press took them with it.
+- The `bHapticsOSC Integration` component being reported as an illegal component by the VRChat
+  SDK. Anyone who uploaded before pressing the setup button got a red error naming the component
+  the documentation had just told them to add.
+
+### Upgrade notes
+- **Only avatars built from the desktop "Without Mesh" column need anything.** That column is
+  reached by unticking **Show mesh** on a device; the default is on. The desktop "With Mesh"
+  column and both Quest columns were already on the v2 scheme and are untouched, as are punch
+  haptics, which worked either way.
+- **Updating the package is not enough.** Reimporting repairs the receivers on your avatar,
+  because the rename changed only the prefabs' parameter names and left their GUIDs and structure
+  alone. It does not touch the animator and expression-parameters assets under
+  `Assets/bHapticsOSC/VRChat/Generated`, which were written once at setup time and still declare
+  the old names. Nothing regenerates them on its own, so the avatar keeps uploading dead
+  parameters until you re-run the setup and upload again. Follow
+  [Regenerate an Existing Avatar Setup](docs/upgrading.md#regenerate-an-existing-avatar-setup).
+- **Do not delete `bHapticsOSC VRCFury` to force a regeneration.** Your devices are parented under
+  it, so deleting it destroys their positions, custom contact tags, punch receivers and compressor
+  groups - and the next one-click setup then reseeds the default device set with **Show mesh** back
+  on, quietly moving you to the other column. Re-running replaces the old VRCFury components by
+  itself. Earlier versions of the upgrade guide said to delete it first; that instruction was
+  wrong and has been corrected.
+- **If you use "Consolidate contact receivers", re-run from the inspector rather than the one-press
+  route.** That setting lives on the `bHapticsOSC Integration` component, which the setup destroys
+  when it finishes, so a one-press re-run starts with it off and removes your compressor groups.
+  Add the component, re-tick the option, then press `CREATE VRCFURY SETUP`. Afterwards, copy the
+  rewritten `contact-compressor.json` into the companion app's `Config` folder again.
+- Have the companion app running the next time you load the avatar in VRChat. It clears VRChat's
+  cached per-avatar OSC config on avatar change, which is what makes VRChat publish the new
+  parameter names.
+
 ## [2.4.0] - 2026-08-28
 
 **This is a test build.** It is the first release of the Furroxide-maintained fork, published
