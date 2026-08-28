@@ -59,7 +59,7 @@ MonoBehaviour:
   allowOthers: 0
   localOnly: 0
   receiverType: 2
-  parameter: bOSC_v1_ForearmR_5
+  parameter: bOSC/v2/ForearmR/5/self
   minVelocity: 0.05
 --- !u!1 &4419787002403334940
 GameObject:
@@ -186,7 +186,7 @@ MonoBehaviour:
   allowOthers: 0
   localOnly: 0
   receiverType: 2
-  parameter: bOSC_v1_ForearmR_2
+  parameter: bOSC/v2/ForearmR/2/self
   minVelocity: 0.05
 --- !u!1 &4419787002639749391
 GameObject:
@@ -247,7 +247,7 @@ MonoBehaviour:
   allowOthers: 0
   localOnly: 0
   receiverType: 2
-  parameter: bOSC_v1_ForearmR_4
+  parameter: bOSC/v2/ForearmR/4/self
   minVelocity: 0.05
 --- !u!1 &4419787003313152811
 GameObject:
@@ -308,7 +308,7 @@ MonoBehaviour:
   allowOthers: 0
   localOnly: 0
   receiverType: 2
-  parameter: bOSC_v1_ForearmR_0
+  parameter: bOSC/v2/ForearmR/0/self
   minVelocity: 0.05
 --- !u!1 &4419787003409301840
 GameObject:
@@ -369,7 +369,7 @@ MonoBehaviour:
   allowOthers: 0
   localOnly: 0
   receiverType: 2
-  parameter: bOSC_v1_ForearmR_3
+  parameter: bOSC/v2/ForearmR/3/self
   minVelocity: 0.05
 --- !u!1 &4419787003816591935
 GameObject:
@@ -430,7 +430,7 @@ MonoBehaviour:
   allowOthers: 0
   localOnly: 0
   receiverType: 2
-  parameter: bOSC_v1_ForearmR_1
+  parameter: bOSC/v2/ForearmR/1/self
   minVelocity: 0.05
 --- !u!1 &4451465907768006937
 GameObject:
@@ -491,7 +491,7 @@ MonoBehaviour:
   allowOthers: 1
   localOnly: 0
   receiverType: 2
-  parameter: bOSC_v1_ForearmR_4
+  parameter: bOSC/v2/ForearmR/4/others
   minVelocity: 0.05
 --- !u!1 &4451465907853509564
 GameObject:
@@ -552,7 +552,7 @@ MonoBehaviour:
   allowOthers: 1
   localOnly: 0
   receiverType: 2
-  parameter: bOSC_v1_ForearmR_3
+  parameter: bOSC/v2/ForearmR/3/others
   minVelocity: 0.05
 --- !u!1 &4451465907861563900
 GameObject:
@@ -613,7 +613,7 @@ MonoBehaviour:
   allowOthers: 1
   localOnly: 0
   receiverType: 2
-  parameter: bOSC_v1_ForearmR_1
+  parameter: bOSC/v2/ForearmR/1/others
   minVelocity: 0.05
 --- !u!1 &4451465908702452921
 GameObject:
@@ -707,7 +707,7 @@ MonoBehaviour:
   allowOthers: 1
   localOnly: 0
   receiverType: 2
-  parameter: bOSC_v1_ForearmR_2
+  parameter: bOSC/v2/ForearmR/2/others
   minVelocity: 0.05
 --- !u!1 &4451465909031726362
 GameObject:
@@ -801,7 +801,7 @@ MonoBehaviour:
   allowOthers: 1
   localOnly: 0
   receiverType: 2
-  parameter: bOSC_v1_ForearmR_5
+  parameter: bOSC/v2/ForearmR/5/others
   minVelocity: 0.05
 --- !u!1 &4451465909150658265
 GameObject:
@@ -926,7 +926,7 @@ MonoBehaviour:
   allowOthers: 1
   localOnly: 0
   receiverType: 2
-  parameter: bOSC_v1_ForearmR_0
+  parameter: bOSC/v2/ForearmR/0/others
   minVelocity: 0.05
 --- !u!1 &6927388290412748429
 GameObject:

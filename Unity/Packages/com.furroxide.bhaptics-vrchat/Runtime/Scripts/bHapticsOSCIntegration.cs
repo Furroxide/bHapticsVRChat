@@ -7,10 +7,17 @@ using System.Linq;
 
 namespace bHapticsOSC.VRChat
 {
+    /// <summary>
+    /// IEditorOnly because this is a setup-time component that never ships: the pipeline
+    /// destroys it once the VRCFury setup exists. Without it, AvatarValidation - which is
+    /// called with excludeEditorOnly: true - reports it as an illegal component, so a user who
+    /// uploaded before pressing the button got a red SDK error naming the very component the
+    /// documentation had just told them to add. bVrcFurySetup has always declared it.
+    /// </summary>
     [AddComponentMenu("bHapticsOSC Integration")]
     [ExecuteInEditMode]
     [System.Serializable]
-    public class bHapticsOSCIntegration : MonoBehaviour
+    public class bHapticsOSCIntegration : MonoBehaviour, VRC.SDKBase.IEditorOnly
     {
         public static string SystemName = "bHapticsOSC";
         public const string VrcFuryRootName = "bHapticsOSC VRCFury";
