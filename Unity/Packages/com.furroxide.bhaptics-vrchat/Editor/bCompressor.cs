@@ -326,28 +326,13 @@ namespace bHapticsOSC.VRChat
             return removed;
         }
 
-        /// <summary>Strips any groups this previously added, for turning the option back off.</summary>
-        public static int RemoveGroups(bHapticsOSCIntegration editorComp)
-        {
-            if (editorComp == null || editorComp.AllUserSettings == null)
-                return 0;
-
-            int removed = 0;
-
-            foreach (bUserSettings settings in editorComp.AllUserSettings.Values)
-            {
-                if (settings.CurrentPrefab == null)
-                    continue;
-
-                foreach (ContactCompressorGroup group in settings.CurrentPrefab.GetComponentsInChildren<ContactCompressorGroup>(true))
-                {
-                    Undo.DestroyObjectImmediate(group);
-                    removed++;
-                }
-            }
-
-            return removed;
-        }
+        // RemoveGroups used to live here. It claimed to strip "any groups this previously
+        // added" but actually swept GetComponentsInChildren over the whole device subtree and
+        // destroyed every ContactCompressorGroup it found, whoever had put it there - and it
+        // ran on the default path, because ConsolidateContacts is false unless the user turns
+        // it on. RemoveGeneratedGroups above is the version that only takes back what this
+        // added, and it is now the only one, so the dangerous behaviour cannot be reached by
+        // picking the friendlier-looking name.
 
         /// <summary>
         /// Receiver counts before and after, for the inspector. Counts only the devices that have a

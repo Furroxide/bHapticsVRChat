@@ -470,7 +470,9 @@ namespace bHapticsOSC.VRChat
 #if bHapticsOSC_HasContactCompressor
 			if (!editorComp.ConsolidateContacts)
 			{
-				bCompressor.RemoveGroups(editorComp);
+				// Only the groups this added. The previous call here swept the whole device
+				// subtree and took a user's own groups with it, on the default path.
+				bCompressor.RemoveGeneratedGroups(editorComp);
 				return;
 			}
 
