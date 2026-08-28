@@ -403,6 +403,16 @@ namespace bHapticsOSC.VRChat
             string required = result.RequiredVersion;
             string detected = result.DetectedVersion;
 
+            // DetectedVersion falls back to string.Empty, and the ReadyRunning Value below already
+            // allows for that, so the sentence that sits beside it has to survive the same blank
+            // rather than rendering "Version  meets the ... requirement". No Ready state can carry
+            // an empty version today - CompareVersions throws on one it cannot parse, so a result
+            // with no version never gets that far - but the two halves of a single step disagreeing
+            // about whether the value can be empty is how that quietly stops being true.
+            string versionPhrase = string.IsNullOrWhiteSpace(detected)
+                ? "The installed version"
+                : "Version " + detected;
+
             switch (result.Status)
             {
                 case bCompanionStatus.ReadyRunning:
@@ -412,7 +422,7 @@ namespace bHapticsOSC.VRChat
                         bStepState.Ok,
                         string.IsNullOrWhiteSpace(detected) ? "Running" : "Running · " + detected,
                         null,
-                        $"Version {detected} meets the {required} requirement and is currently running.");
+                        $"{versionPhrase} meets the {required} requirement and is currently running.");
 
                 case bCompanionStatus.ReadyStopped:
                     return new bSetupStep(
@@ -421,7 +431,7 @@ namespace bHapticsOSC.VRChat
                         bStepState.Attention,
                         null,
                         "Installed, but not running.",
-                        $"Version {detected} meets the {required} requirement. Launch it before using "
+                        $"{versionPhrase} meets the {required} requirement. Launch it before using "
                         + "haptics in VRChat - nothing reaches your gear while it is closed.",
                         new bStepAction("Start bHapticsOSC", actions.Launch, true));
 
