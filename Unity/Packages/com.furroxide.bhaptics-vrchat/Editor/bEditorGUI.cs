@@ -411,8 +411,16 @@ namespace bHapticsOSC.VRChat
             var row = new VisualElement();
             row.AddToClassList("b-row");
 
+            // Adding has the same split as removing: SwapPrefabs registers the object it creates,
+            // while Reset() and IsMobile write to the settings outside the undo system. Without the
+            // snapshot, Ctrl+Z destroys the new device and leaves the settings still describing it
+            // - CurrentPrefab pointing at the destroyed object, the platform flag on the new value
+            // - which is the state that lets the next Add spawn a second device beside the first.
             row.Add(new Button(() =>
             {
+                Undo.RegisterCompleteObjectUndo(
+                    settings,
+                    $"[{bHapticsOSCIntegration.SystemName}] Clicked Add device (PC)");
                 settings.Reset();
                 settings.IsMobile = false;
                 OnDeviceSetChanged();
@@ -423,6 +431,9 @@ namespace bHapticsOSC.VRChat
             {
                 row.Add(new Button(() =>
                 {
+                    Undo.RegisterCompleteObjectUndo(
+                        settings,
+                        $"[{bHapticsOSCIntegration.SystemName}] Clicked Add device (Quest)");
                     settings.Reset();
                     settings.IsMobile = true;
                     OnDeviceSetChanged();
