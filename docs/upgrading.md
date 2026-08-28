@@ -55,15 +55,67 @@ Projects that cannot use the VPM package may continue importing the newer `bHapt
 
 ## Regenerate an Existing Avatar Setup
 
-1. Open the avatar scene or prefab in Unity.
-2. Find the `bHapticsOSC VRCFury` object under the avatar.
-3. Delete `bHapticsOSC VRCFury`, save the scene or prefab, and close it to remove the old generated setup and generated assets.
-4. Add the `bHapticsOSC Integration` component to the avatar root again if it is not already present.
-5. Re-add or confirm the bHaptics device objects you want on the avatar.
-6. Use `CREATE VRCFURY SETUP` in the bHapticsOSC Integration inspector.
-7. Upload the avatar again through the VRChat SDK.
+**Do not delete `bHapticsOSC VRCFury` first.** Your devices are parented under that object, so
+deleting it destroys their positions, their custom contact tags, their generated punch receivers
+and any contact-compressor groups. Re-running the setup already replaces the old VRCFury
+components by itself. Deleting the object is the way to *remove* the setup, not to regenerate it.
 
-If you only updated `bHapticsOSC.exe`, you usually do not need to regenerate the avatar setup. Regenerate the setup when you import a newer Unity package, change the devices on the avatar, or need new generated VRCFury assets.
+Before you start, check two things in the Hierarchy:
+
+- The `bHapticsOSC VRCFury` object and every device under it must be **active**. The scan that
+  adopts your existing devices ignores disabled objects, so a disabled device is skipped: it is
+  left behind unadopted while the rest are picked up, and the new setup is built without it. If
+  none of your devices can be adopted - all of them disabled, or the whole VRCFury object
+  disabled - the setup treats the avatar as fresh and seeds the default device set instead.
+- The devices must still be prefab instances. If you unpacked one it cannot be adopted; delete it
+  and add the device again from the inspector instead.
+
+Then pick a route.
+
+### Route A - one press, refits everything
+
+1. Open the avatar scene or prefab in Unity and select the avatar in the Hierarchy.
+2. Either open **bHapticsOSC > Setup Assistant** and press **Set up \<avatar\> again**, or
+   right-click the avatar and choose **bHapticsOSC > Set up this avatar**. Accept the prompt.
+3. Save the scene or prefab.
+4. Upload the avatar again through the VRChat SDK.
+
+Route A re-fits every device to the rig, so any position or scale you tuned by hand is recomputed.
+It also leaves **Consolidate contact receivers** switched off, because that setting lives on the
+`bHapticsOSC Integration` component and the setup destroys that component when it finishes. If you
+were using contact compression, use Route B.
+
+### Route B - inspector, keeps your positions
+
+1. Open the avatar scene or prefab in Unity.
+2. Add the `bHapticsOSC Integration` component to the avatar root **if it is not already there**,
+   and let the inspector pick up your existing devices. A completed setup removes the component,
+   so normally it is absent - but if a previous run was cancelled or failed partway it may still
+   be on the avatar. Nothing stops you adding a second one, and two of them means two inspectors
+   competing over the same devices, so use the one that is there rather than adding another.
+3. Re-tick **Consolidate contact receivers** if you were using it.
+4. Press `CREATE VRCFURY SETUP`.
+5. Save the scene or prefab.
+6. Upload the avatar again through the VRChat SDK.
+
+Route B does not auto-fit, so nothing moves.
+
+### Afterwards
+
+- A fresh folder appears under `Assets/bHapticsOSC/VRChat/Generated`, named after your avatar, and
+  the VRCFury Full Controller now points at it. Your custom contact tags are carried over
+  automatically - they are read back off the receivers before being re-applied.
+- If you use contact consolidation, the setup rewrites
+  `Assets/bHapticsOSC/VRChat/Generated/contact-compressor.json`. Copy it into the companion app's
+  `Config` folder again; it describes this avatar's motor layout specifically, and the old copy is
+  now out of date.
+- Your previous generated subfolder is left behind and is no longer referenced. Once the new setup
+  uploads correctly you may delete that one subfolder. Never delete the `Generated` folder itself,
+  which also holds `contact-compressor.json`.
+
+If you only updated `bHapticsOSC.exe`, you usually do not need to regenerate the avatar setup.
+Regenerate the setup when you import a newer Unity package, change the devices on the avatar, or
+need new generated VRCFury assets.
 
 ## Artifact Sources
 
