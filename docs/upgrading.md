@@ -88,8 +88,11 @@ were using contact compression, use Route B.
 ### Route B - inspector, keeps your positions
 
 1. Open the avatar scene or prefab in Unity.
-2. Add the `bHapticsOSC Integration` component to the avatar root and let the inspector pick up
-   your existing devices.
+2. Add the `bHapticsOSC Integration` component to the avatar root **if it is not already there**,
+   and let the inspector pick up your existing devices. A completed setup removes the component,
+   so normally it is absent - but if a previous run was cancelled or failed partway it may still
+   be on the avatar. Nothing stops you adding a second one, and two of them means two inspectors
+   competing over the same devices, so use the one that is there rather than adding another.
 3. Re-tick **Consolidate contact receivers** if you were using it.
 4. Press `CREATE VRCFURY SETUP`.
 5. Save the scene or prefab.
