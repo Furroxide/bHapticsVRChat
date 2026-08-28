@@ -36,6 +36,7 @@
     --b-card-strong: rgba(255, 255, 255, 0.08);
     --b-hairline: rgba(255, 255, 255, 0.09);
     --b-dim: rgba(255, 255, 255, 0.5);
+    --b-focus: rgb(88, 155, 224);
 }
 
 .b-theme--light {
@@ -47,6 +48,7 @@
     --b-card-strong: rgba(0, 0, 0, 0.07);
     --b-hairline: rgba(0, 0, 0, 0.12);
     --b-dim: rgba(0, 0, 0, 0.55);
+    --b-focus: rgb(38, 106, 178);
 }
 
 /* ------------------------------------------------------------------ header */
@@ -413,6 +415,20 @@
 
 .b-rig__device:hover {
     opacity: 0.85;
+}
+
+/* The device buttons are transparent cut-outs over the rig art, so the border that would normally
+   say "this one has focus" was turned off to keep them invisible. A Button is focusable by
+   default, and moving the picker off nine hand-placed IMGUI offsets is what made tabbing through
+   it possible in the first place, so without this a keyboard user is moving a selection they
+   cannot see. The border is drawn back only while focused: these are absolutely positioned at an
+   explicit rect, so it is painted inside the existing box and shifts neither the sprite nor its
+   neighbours. Unity's USS has no outline property and does not implement :focus-visible, so a
+   plain :focus border is the whole of what is available here. */
+.b-rig__device:focus {
+    border-width: 2px;
+    border-color: var(--b-focus);
+    border-radius: 3px;
 }
 
 .b-rig__badge {
