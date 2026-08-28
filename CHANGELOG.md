@@ -4,12 +4,13 @@
 
 ### Fixed
 - Per-node touch on the desktop **Without Mesh** device column, which never reached the hardware.
-  Every receiver in that column was named `bOSC_v1_VestBack_0`, while the companion app subscribes
-  to `bOSC/v2/VestBack/0/self` and to a legacy `bHapticsOSC_Vest_Back_1` form. It matched neither,
-  and unmatched OSC addresses are dropped without a log line, so an avatar built from this column
-  felt punch impacts - those receivers are named separately - and nothing at all from being
-  touched. All 140 parameters now use the v2 scheme, splitting self from others to match the
-  `allowSelf` and `allowOthers` already set on each receiver.
+  Every receiver in that column was named in a `bOSC_v1_<Device>_<Node>` form - `bOSC_v1_Head_3`,
+  `bOSC_v1_VestFront_7`, and so on - while the companion app subscribes to
+  `bOSC/v2/<Device>/<Node>/<self|others>` and to a legacy `bHapticsOSC_Vest_Back_1` form. It
+  matched neither, and unmatched OSC addresses are dropped without a log line, so an avatar built
+  from this column felt punch impacts - those receivers are named separately - and nothing at all
+  from being touched. All 140 parameters now use the v2 scheme, splitting self from others to
+  match the `allowSelf` and `allowOthers` already set on each receiver.
 - The setup pipeline destroying contact-compressor groups a user had placed by hand. The cleanup
   it ran on the default path swept the whole device subtree rather than the groups it had created,
   so an ordinary `CREATE VRCFURY SETUP` press took them with it.

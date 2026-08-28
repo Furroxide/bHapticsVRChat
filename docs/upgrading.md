@@ -63,8 +63,10 @@ components by itself. Deleting the object is the way to *remove* the setup, not 
 Before you start, check two things in the Hierarchy:
 
 - The `bHapticsOSC VRCFury` object and every device under it must be **active**. The scan that
-  adopts your existing devices ignores disabled objects, so a disabled device is not recognised
-  and gets replaced by a fresh default set.
+  adopts your existing devices ignores disabled objects, so a disabled device is skipped: it is
+  left behind unadopted while the rest are picked up, and the new setup is built without it. If
+  none of your devices can be adopted - all of them disabled, or the whole VRCFury object
+  disabled - the setup treats the avatar as fresh and seeds the default device set instead.
 - The devices must still be prefab instances. If you unpacked one it cannot be adopted; delete it
   and add the device again from the inspector instead.
 
