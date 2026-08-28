@@ -31,12 +31,6 @@ namespace bHapticsOSC.VRChat
         public bool ConsolidateContacts = false;
         [SerializeField]
         public Dictionary<bDeviceTemplate, bUserSettings> AllUserSettings;
-        [SerializeField]
-        public Dictionary<bUserSettings, bReorderableListContainer<string>> AllCustomContactTagsContainers;
-
-        //private static int AudioLinkCost = 8;
-        //[SerializeField]
-        //public bool AudioLink = false;
 
         /// <summary>
         /// Why this component cannot be used where it currently sits.
@@ -216,17 +210,11 @@ namespace bHapticsOSC.VRChat
 
         public bool IsReadyToApply()
         {
-            //if (AudioLink)
-            //    return true;
             foreach (bUserSettings settings in AllUserSettings.Values)
                 if (settings.CurrentPrefab != null)
                     return true;
             return false;
         }
-
-        //public void ResetExtras()
-        //{
-        //}
 
         public void FindExistingPrefabs(Dictionary<bDeviceType, bDeviceTemplate> deviceTemplates)
         {

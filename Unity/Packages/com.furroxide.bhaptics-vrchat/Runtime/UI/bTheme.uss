@@ -1,0 +1,454 @@
+/*
+ * Shared styling for the bHapticsOSC setup window and the integration inspector.
+ *
+ * Accent colours are declared per skin rather than pulled from --unity-colors-*, because the
+ * ok/attention/blocked hues have no counterpart in Unity's palette and the editor exposes no
+ * media query for the skin. The root element is given b-theme--dark or b-theme--light from C#
+ * off EditorGUIUtility.isProSkin. Everything that does have a palette entry uses it, so the
+ * panel follows the user's theme instead of the old hardcoded (0.16, 0.16, 0.16) separator.
+ */
+
+.b-root {
+    padding: 0;
+    flex-grow: 1;
+}
+
+.b-theme--dark {
+    --b-ok: rgb(122, 186, 126);
+    --b-attention: rgb(226, 170, 74);
+    --b-blocked: rgb(226, 110, 98);
+    --b-unknown: rgb(150, 150, 150);
+    --b-card: rgba(255, 255, 255, 0.045);
+    --b-card-strong: rgba(255, 255, 255, 0.08);
+    --b-hairline: rgba(255, 255, 255, 0.09);
+    --b-dim: rgba(255, 255, 255, 0.5);
+}
+
+.b-theme--light {
+    --b-ok: rgb(45, 122, 62);
+    --b-attention: rgb(166, 105, 0);
+    --b-blocked: rgb(180, 55, 45);
+    --b-unknown: rgb(110, 110, 110);
+    --b-card: rgba(0, 0, 0, 0.04);
+    --b-card-strong: rgba(0, 0, 0, 0.07);
+    --b-hairline: rgba(0, 0, 0, 0.12);
+    --b-dim: rgba(0, 0, 0, 0.55);
+}
+
+/* ------------------------------------------------------------------ header */
+
+.b-header {
+    flex-direction: row;
+    align-items: center;
+    padding: 8px 10px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--b-hairline);
+}
+
+.b-header__icon {
+    width: 22px;
+    height: 22px;
+    margin-right: 7px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.b-header__title {
+    -unity-font-style: bold;
+    font-size: 13px;
+    flex-grow: 1;
+}
+
+/* The pill replaces the standing two-sentence intro paragraph: same information, read at a
+   glance, and it changes when the situation changes. */
+.b-pill {
+    border-radius: 9px;
+    padding: 1px 9px;
+    -unity-font-style: bold;
+    font-size: 11px;
+    -unity-text-align: middle-center;
+    margin-right: 4px;
+}
+
+.b-pill--ok {
+    background-color: var(--b-ok);
+    color: rgb(20, 20, 20);
+}
+
+.b-pill--attention {
+    background-color: var(--b-attention);
+    color: rgb(20, 20, 20);
+}
+
+.b-pill--blocked {
+    background-color: var(--b-blocked);
+    color: rgb(255, 255, 255);
+}
+
+.b-pill--unknown {
+    background-color: var(--b-unknown);
+    color: rgb(20, 20, 20);
+}
+
+/* ------------------------------------------------------------------ next-step banner */
+
+.b-banner {
+    flex-direction: row;
+    align-items: center;
+    margin: 8px 10px 2px 10px;
+    padding: 8px 10px;
+    border-radius: 4px;
+    background-color: var(--b-card-strong);
+    border-left-width: 3px;
+}
+
+.b-banner--ok {
+    border-left-color: var(--b-ok);
+    padding: 5px 10px;
+}
+
+.b-banner--attention {
+    border-left-color: var(--b-attention);
+}
+
+.b-banner--blocked {
+    border-left-color: var(--b-blocked);
+}
+
+.b-banner__text {
+    flex-grow: 1;
+    flex-shrink: 1;
+    white-space: normal;
+    margin-right: 8px;
+}
+
+.b-banner__title {
+    -unity-font-style: bold;
+}
+
+.b-banner__detail {
+    white-space: normal;
+    opacity: 0.85;
+}
+
+.b-toast {
+    margin: 6px 10px 0 10px;
+    white-space: normal;
+}
+
+/* ------------------------------------------------------------------ groups */
+
+.b-group {
+    margin: 8px 10px 0 10px;
+}
+
+.b-group > .unity-foldout__toggle > .unity-toggle__input > .unity-label {
+    -unity-font-style: bold;
+}
+
+.b-group__rollup {
+    opacity: 0.55;
+    -unity-font-style: normal;
+    margin-left: 6px;
+}
+
+.b-group__content {
+    margin-top: 2px;
+}
+
+/* ------------------------------------------------------------------ step rows */
+
+.b-step {
+    flex-direction: column;
+    border-radius: 4px;
+    margin-bottom: 2px;
+    padding: 2px 6px;
+}
+
+/* A satisfied step is one line and nothing else. Its prose lives in the tooltip. */
+.b-step--ok,
+.b-step--unknown {
+    background-color: transparent;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+.b-step--attention,
+.b-step--blocked {
+    background-color: var(--b-card);
+    border-left-width: 3px;
+    padding: 6px 8px;
+    margin-bottom: 4px;
+}
+
+.b-step--attention {
+    border-left-color: var(--b-attention);
+}
+
+.b-step--blocked {
+    border-left-color: var(--b-blocked);
+}
+
+.b-step__head {
+    flex-direction: row;
+    align-items: center;
+    min-height: 20px;
+}
+
+.b-step__icon {
+    width: 13px;
+    height: 13px;
+    margin-right: 6px;
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+/* Fallback when a built-in editor icon cannot be resolved: a plain state dot. */
+.b-step__icon--dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 4px;
+    margin-left: 3px;
+    margin-right: 9px;
+}
+
+/* Scoped to the dot on purpose: when a real icon resolved, tinting the element paints a
+   coloured square behind the transparent glyph. */
+.b-step__icon--dot.b-step__icon--ok {
+    background-color: var(--b-ok);
+}
+
+.b-step__icon--dot.b-step__icon--attention {
+    background-color: var(--b-attention);
+}
+
+.b-step__icon--dot.b-step__icon--blocked {
+    background-color: var(--b-blocked);
+}
+
+.b-step__icon--dot.b-step__icon--unknown {
+    background-color: var(--b-unknown);
+}
+
+.b-step__title {
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.b-step--attention .b-step__title,
+.b-step--blocked .b-step__title {
+    -unity-font-style: bold;
+}
+
+.b-step__value {
+    color: var(--b-dim);
+    -unity-text-align: middle-right;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.b-step__detail {
+    white-space: normal;
+    margin-top: 2px;
+    margin-left: 19px;
+    margin-bottom: 2px;
+}
+
+.b-step__actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-left: 15px;
+    margin-top: 2px;
+}
+
+.b-step__actions > .unity-button {
+    margin-left: 4px;
+    min-height: 21px;
+}
+
+.b-step__action--primary {
+    -unity-font-style: bold;
+}
+
+/* Offered by a satisfied row without costing it its single line. */
+.b-step__inline-action {
+    min-height: 17px;
+    font-size: 11px;
+    padding: 0 8px;
+    margin: 0 0 0 8px;
+    flex-shrink: 0;
+}
+
+/* "Why this matters" - where the long prose went. */
+.b-step__why {
+    margin-left: 15px;
+    margin-top: 2px;
+}
+
+.b-step__why > .unity-foldout__toggle > .unity-toggle__input > .unity-label {
+    font-size: 11px;
+    opacity: 0.7;
+}
+
+.b-step__why .b-step__explanation {
+    white-space: normal;
+    opacity: 0.8;
+    margin-left: -10px;
+    margin-top: 2px;
+    margin-bottom: 3px;
+}
+
+/* ------------------------------------------------------------------ misc chrome */
+
+.b-section-label {
+    -unity-font-style: bold;
+    margin: 10px 10px 2px 10px;
+}
+
+.b-hairline {
+    height: 1px;
+    background-color: var(--b-hairline);
+    margin: 8px 10px;
+}
+
+.b-path {
+    margin-top: 2px;
+    opacity: 0.7;
+    white-space: normal;
+    font-size: 11px;
+}
+
+.b-other-options {
+    margin: 6px 10px 10px 10px;
+}
+
+.b-other-options__row {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.b-other-options__row > .unity-button {
+    flex-grow: 1;
+    flex-basis: 40%;
+    min-height: 21px;
+}
+
+.b-installer {
+    margin: 6px 10px;
+}
+
+.b-installer__row {
+    flex-direction: row;
+    margin-top: 4px;
+}
+
+.b-installer__row > .unity-button {
+    flex-grow: 1;
+}
+
+/* ------------------------------------------------------------------ inspector */
+
+/* The companion status used to open the inspector with a bold label above a full paragraph,
+   pushing the device picker - the thing the user opened the inspector for - below the fold.
+   When there is nothing wrong it is now a single line. */
+.b-companion-strip {
+    flex-direction: row;
+    align-items: center;
+    padding: 3px 4px;
+    margin-bottom: 4px;
+    border-radius: 4px;
+    background-color: var(--b-card);
+}
+
+.b-companion-strip__text {
+    flex-grow: 1;
+    color: var(--b-dim);
+    font-size: 11px;
+}
+
+.b-companion-strip__button {
+    min-height: 19px;
+    font-size: 11px;
+}
+
+/* The rig picker. Absolute positioning replaces nine hand-tuned negative GUILayout.Space
+   offsets, and lets the figure scale with the inspector instead of being fixed at the sprite
+   sizes it was authored against. */
+.b-rig {
+    align-self: center;
+    position: relative;
+    margin-top: 4px;
+    margin-bottom: 2px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.b-rig__device {
+    position: absolute;
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    margin: 0;
+    padding: 0;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.b-rig__device:hover {
+    opacity: 0.85;
+}
+
+.b-rig__badge {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.b-device-panel {
+    margin-top: 4px;
+    padding: 6px;
+    border-radius: 4px;
+    background-color: var(--b-card);
+}
+
+.b-device-panel__head {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.b-device-panel__title {
+    -unity-font-style: bold;
+    flex-grow: 1;
+}
+
+.b-row {
+    flex-direction: row;
+}
+
+.b-row > .unity-button {
+    flex-grow: 1;
+    min-height: 22px;
+}
+
+.b-primary-button {
+    min-height: 26px;
+    -unity-font-style: bold;
+    margin: 8px 10px;
+}
+
+.b-inline-note {
+    color: var(--b-dim);
+    font-size: 11px;
+    margin-left: 4px;
+}
+
+.b-toggle-row {
+    flex-direction: row;
+    align-items: center;
+}
+
+.b-toggle-row > .unity-toggle {
+    margin-right: 0;
+}

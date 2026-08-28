@@ -102,8 +102,11 @@ namespace bHapticsOSC.VRChat
 
         private static string BuildCompanionWarning(bCompanionStatusResult result)
         {
-            string summary = bCompanionStatusGUI.GetSummary(result);
-            string details = bCompanionStatusGUI.GetDetails(result);
+            // The same wording the setup window shows, from the same place - this used to be a
+            // second copy of the status string table that could drift away from it.
+            bSetupStep step = bSetupModel.DescribeCompanion(result);
+            string summary = string.IsNullOrWhiteSpace(step.Detail) ? step.Title : step.Detail;
+            string details = step.Explanation;
             string message = string.IsNullOrWhiteSpace(details)
                 ? summary
                 : $"{summary}\n{details}";

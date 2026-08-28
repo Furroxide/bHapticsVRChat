@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<engine:UXML
+    xmlns:engine="UnityEngine.UIElements"
+    xmlns:editor="UnityEditor.UIElements">
+
+    <!--
+      Static chrome only. The step rows are built in C# from bSetupModel, because what they say
+      and how loud they are both depend on what the editor just observed.
+    -->
+
+    <engine:VisualElement name="header" class="b-header">
+        <engine:VisualElement name="header-icon" class="b-header__icon" />
+        <engine:Label name="header-title" text="bHapticsOSC" class="b-header__title" />
+        <engine:Label name="header-pill" class="b-pill" />
+        <engine:Button name="header-recheck" text="Recheck" />
+    </engine:VisualElement>
+
+    <engine:ScrollView name="body">
+        <!-- The one thing to do next, before anything asks to be read. -->
+        <engine:VisualElement name="banner" class="b-banner">
+            <engine:VisualElement name="banner-icon" class="b-step__icon" />
+            <engine:VisualElement name="banner-text" class="b-banner__text">
+                <engine:Label name="banner-title" class="b-banner__title" />
+                <engine:Label name="banner-detail" class="b-banner__detail" />
+            </engine:VisualElement>
+            <engine:Button name="banner-action" />
+        </engine:VisualElement>
+
+        <!-- Result of the last action the user took, next to the controls that caused it. -->
+        <engine:VisualElement name="toast" class="b-toast" />
+
+        <!-- Download progress, drawn here rather than behind a modal bar so the editor stays
+             usable while several megabytes come down. -->
+        <engine:VisualElement name="installer" class="b-installer" />
+
+        <engine:VisualElement name="groups" />
+
+        <engine:VisualElement class="b-hairline" />
+
+        <engine:Foldout name="other-options" text="Other options" value="false" class="b-other-options">
+            <engine:VisualElement class="b-other-options__row">
+                <engine:Button name="opt-releases" text="Open the releases page" />
+                <engine:Button name="opt-download" text="Download in a browser" />
+            </engine:VisualElement>
+            <engine:VisualElement class="b-other-options__row">
+                <engine:Button name="opt-find" text="Find automatically" />
+                <engine:Button name="opt-locate" text="Locate existing app" />
+            </engine:VisualElement>
+            <engine:VisualElement class="b-other-options__row">
+                <engine:Button name="opt-launch" text="Launch" />
+                <engine:Button name="opt-stop" text="Stop the unsupported app" />
+            </engine:VisualElement>
+            <engine:VisualElement class="b-other-options__row">
+                <engine:Button name="opt-forget" text="Forget remembered app" />
+                <engine:Button name="opt-recheck" text="Recheck" />
+            </engine:VisualElement>
+            <engine:Label name="opt-path" class="b-path" />
+        </engine:Foldout>
+    </engine:ScrollView>
+</engine:UXML>
