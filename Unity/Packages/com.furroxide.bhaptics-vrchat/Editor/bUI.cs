@@ -31,6 +31,17 @@ namespace bHapticsOSC.VRChat
                 return;
 
             root.AddToClassList("b-root");
+
+            // Both come off before either goes on, because this is called more than once on the
+            // same element: an EditorWindow keeps one rootVisualElement for its whole life, and
+            // CreateGUI runs again after every domain reload, where root.Clear() empties the
+            // children but leaves the element's own classes alone. Change the editor skin with the
+            // window open and the second pass would otherwise add the new theme alongside the old
+            // one. The two rules carry equal specificity, so the winner would just be whichever
+            // USS declared last - .b-theme--light - and the window would come back in the light
+            // palette on a dark skin.
+            root.RemoveFromClassList("b-theme--dark");
+            root.RemoveFromClassList("b-theme--light");
             root.AddToClassList(EditorGUIUtility.isProSkin ? "b-theme--dark" : "b-theme--light");
 
             StyleSheet sheet = bPackageAssetResolver.LoadAsset<StyleSheet>(StyleSheetPath);
