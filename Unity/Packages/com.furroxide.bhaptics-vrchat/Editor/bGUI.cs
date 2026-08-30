@@ -1,313 +1,61 @@
 #if UNITY_EDITOR && VRC_SDK_VRCSDK3 && bHapticsOSC_HasVrcFury
 using System.Collections.Generic;
-using UnityEditor;
-using UnityEditor.Sprites;
 using UnityEngine;
 
 namespace bHapticsOSC.VRChat
 {
+    /// <summary>
+    /// The rig picker's art and geometry.
+    ///
+    /// This used to also be the package's IMGUI drawing layer - buttons, toggles, sections,
+    /// separators, a hardcoded dark separator colour that was invisible on the light skin. All of
+    /// that went when the inspector moved to UI Toolkit, where the stylesheet does it and follows
+    /// the user's theme. What is left is the part that is genuinely data: which sprite belongs to
+    /// which device, and where on the figure it goes.
+    /// </summary>
     public static class bGUI
     {
-        private static Color SeperatorColor = new Color(0.16f, 0.16f, 0.16f, 1f);
-        private static Texture2D SeperatorTexture;
-        private static GUIStyle SeperatorStyle;
-
-        private static GUIStyle ButtonStyle;
-        private static GUIStyle HeaderButtonStyle;
-        public static GUIStyle LabelStyle;
+        /// <summary>
+        /// The rig art's own pixel size. Every placement below is in this space, recovered from a
+        /// screenshot of the original IMGUI picker by template-matching each sprite against it, so
+        /// the figure is laid out exactly as it always was rather than re-eyeballed.
+        /// </summary>
+        public static readonly Vector2 RigSize = new Vector2(200f, 443f);
 
         public static Sprite Rig;
-        private static GUIStyle RigStyle;
 
-        public static Dictionary<bDeviceType, bGUITemplateElements> Elements = new Dictionary<bDeviceType, bGUITemplateElements>();
+        public static Dictionary<bDeviceType, bGUITemplateElements> Elements =
+            new Dictionary<bDeviceType, bGUITemplateElements>();
 
         static bGUI()
         {
-            SeperatorTexture = new Texture2D(1, 1);
-            SeperatorTexture.SetPixels(new Color[] { SeperatorColor });
-            SeperatorTexture.Apply();
-
-            SeperatorStyle = new GUIStyle(GUI.skin.box);
-            SeperatorStyle.normal.background = SeperatorTexture;
-            SeperatorStyle.normal.textColor = SeperatorColor;
-
-            ButtonStyle = new GUIStyle(GUI.skin.button) { alignment = TextAnchor.MiddleCenter };
-            HeaderButtonStyle = new GUIStyle(ButtonStyle) { contentOffset = new Vector2(-5, 1) };
-
-            LabelStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter };
-
             Rig = LoadSprite("rig.png");
-            RigStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.UpperCenter };
 
-            Elements[bDeviceType.HEAD] = new bGUITemplateElements
-            {
-                NotSelected = LoadSprite("tactal.png"),
-                Selected = LoadSprite("tactal_selected.png"),
-                Prefab = LoadSprite("tactal_prefab.png"),
-                Style = new GUIStyle(RigStyle) { contentOffset = new Vector2(2, 0) }
-            };
+            Elements[bDeviceType.HEAD] = Load("tactal", new Rect(66f, 8f, 67f, 27f));
+            Elements[bDeviceType.VEST] = Load("tactsuit", new Rect(50f, 59f, 100f, 155f));
 
-            Elements[bDeviceType.VEST] = new bGUITemplateElements
-            {
-                NotSelected = LoadSprite("tactsuit.png"),
-                Selected = LoadSprite("tactsuit_selected.png"),
-                Prefab = LoadSprite("tactsuit_prefab.png"),
-                Style = new GUIStyle(RigStyle) { contentOffset = new Vector2(2, 0) }
-            };
+            Elements[bDeviceType.ARM_LEFT] = Load("tactosyA_left", new Rect(140f, 151f, 40f, 50f));
+            Elements[bDeviceType.ARM_RIGHT] = Load("tactosyA_right", new Rect(20f, 151f, 40f, 50f));
 
-            Elements[bDeviceType.ARM_LEFT] = new bGUITemplateElements
-            {
-                NotSelected = LoadSprite("tactosyA_left.png"),
-                Selected = LoadSprite("tactosyA_left_selected.png"),
-                Prefab = LoadSprite("tactosyA_left_prefab.png"),
-                Style = new GUIStyle(RigStyle) { contentOffset = new Vector2(62, 0) }
-            };
-
-            Elements[bDeviceType.ARM_RIGHT] = new bGUITemplateElements
-            {
-                NotSelected = LoadSprite("tactosyA_right.png"),
-                Selected = LoadSprite("tactosyA_right_selected.png"),
-                Prefab = LoadSprite("tactosyA_right_prefab.png"),
-                Style = new GUIStyle(RigStyle) { contentOffset = new Vector2(-58, 0) }
-            };
-
-            Elements[bDeviceType.HAND_LEFT] = new bGUITemplateElements
-            {
-                NotSelected = LoadSprite("tactosyH_left.png"),
-                Selected = LoadSprite("tactosyH_left_selected.png"),
-                Prefab = LoadSprite("tactosyH_left_prefab.png"),
-                Style = new GUIStyle(RigStyle) { contentOffset = new Vector2(78, 0) }
-            };
-
-            Elements[bDeviceType.HAND_RIGHT] = new bGUITemplateElements
-            {
-                NotSelected = LoadSprite("tactosyH_right.png"),
-                Selected = LoadSprite("tactosyH_right_selected.png"),
-                Prefab = LoadSprite("tactosyH_right_prefab.png"),
-                Style = new GUIStyle(RigStyle) { contentOffset = new Vector2(-73, 0) }
-            };
+            Elements[bDeviceType.HAND_LEFT] = Load("tactosyH_left", new Rect(158f, 196f, 37f, 50f));
+            Elements[bDeviceType.HAND_RIGHT] = Load("tactosyH_right", new Rect(5f, 196f, 37f, 50f));
 
             // Gloves
 
-            Elements[bDeviceType.FOOT_LEFT] = new bGUITemplateElements
-            {
-                NotSelected = LoadSprite("tactosyF_left.png"),
-                Selected = LoadSprite("tactosyF_left_selected.png"),
-                Prefab = LoadSprite("tactosyF_left_prefab.png"),
-                Style = new GUIStyle(RigStyle) { contentOffset = new Vector2(54, 0) }
-            };
-
-            Elements[bDeviceType.FOOT_RIGHT] = new bGUITemplateElements
-            {
-                NotSelected = LoadSprite("tactosyF_right.png"),
-                Selected = LoadSprite("tactosyF_right_selected.png"),
-                Prefab = LoadSprite("tactosyF_right_prefab.png"),
-                Style = new GUIStyle(RigStyle) { contentOffset = new Vector2(-50, 0) }
-            };
+            Elements[bDeviceType.FOOT_LEFT] = Load("tactosyF_left", new Rect(132f, 394f, 39f, 47f));
+            Elements[bDeviceType.FOOT_RIGHT] = Load("tactosyF_right", new Rect(27f, 394f, 39f, 47f));
         }
+
+        private static bGUITemplateElements Load(string baseName, Rect placement) => new bGUITemplateElements
+        {
+            NotSelected = LoadSprite(baseName + ".png"),
+            Selected = LoadSprite(baseName + "_selected.png"),
+            Prefab = LoadSprite(baseName + "_prefab.png"),
+            Placement = placement,
+        };
 
         private static Sprite LoadSprite(string fileName)
             => bPackageAssetResolver.LoadAsset<Sprite>($"Textures/UI/{fileName}");
-
-        public static void DrawSeparator()
-        {
-            EditorGUILayout.Space();
-            GUILayout.Box(string.Empty, SeperatorStyle, GUILayout.ExpandWidth(true), GUILayout.Height(1));
-            EditorGUILayout.Space();
-        }
-
-        public static bool DrawToggle(string text, bool value, Object undoObject = null)
-        {
-            Rect toggleRect = GUILayoutUtility.GetRect(new GUIContent(text), GUI.skin.toggle);
-            toggleRect.width = GUI.skin.toggle.CalcSize(new GUIContent(text)).x;
-
-            EditorGUI.BeginChangeCheck();
-            bool newvalue = GUI.Toggle(toggleRect, value, text);
-            if (EditorGUI.EndChangeCheck() && (undoObject != null))
-                Undo.RecordObject(undoObject, $"[{bHapticsOSCIntegration.SystemName}] Toggled {text}");
-            
-            EditorGUIUtility.AddCursorRect(toggleRect, MouseCursor.Link);
-
-            return newvalue;
-        }
-
-        public static void DrawSection(string name, System.Action draw, System.Action headerDraw = null)
-        {
-            GUILayout.BeginVertical(name, "window");
-            headerDraw?.Invoke();
-            if (!string.IsNullOrEmpty(name))
-            {
-                GUILayout.Space(-8);
-                DrawSeparator();
-                GUILayout.Space(-3);
-            }
-            draw?.Invoke();
-            GUILayout.Space(5);
-            GUILayout.EndVertical();
-        }
-
-        public static void DrawRig()
-        {
-            Texture2D spriteTexture = SpriteUtility.GetSpriteTexture(Rig, false);
-
-            GUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace();
-
-            GUILayout.Label(spriteTexture, RigStyle);
-
-            GUILayout.FlexibleSpace();
-            GUILayout.EndHorizontal();
-        }
-
-        public static void DrawTemplateButton(bHapticsOSCIntegration editorComp, bDeviceType device)
-        {
-            bGUITemplateElements templateElement = Elements[device];
-            if (templateElement == null)
-                return;
-
-            bDeviceTemplate template = bDevice.AllTemplates[device];
-
-            bool isSelected = (editorComp.CurrentDevice == device);
-            Sprite sprite = isSelected ? templateElement.Selected : templateElement.NotSelected;
-
-            Texture2D spriteTexture = SpriteUtility.GetSpriteTexture(sprite, false);
-
-            GUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace();
-
-            Rect spriteRect = GUILayoutUtility.GetRect(new GUIContent(spriteTexture), templateElement.Style);
-            spriteRect.width = spriteTexture.width;
-
-            Vector2 originalOffset = templateElement.Style.contentOffset;
-            templateElement.Style.contentOffset = Vector2.zero;
-            spriteRect.x += originalOffset.x;
-            spriteRect.y += originalOffset.y;
-
-            if (GUI.Button(spriteRect, spriteTexture, templateElement.Style) && !isSelected)
-            {
-                isSelected = true;
-                Undo.RecordObject(editorComp, $"[{bHapticsOSCIntegration.SystemName}] Selected Device");
-                editorComp.CurrentDevice = device;
-            }
-
-            if ((templateElement.Prefab != null) && (editorComp.AllUserSettings[template].CurrentPrefab != null))
-            {
-                Texture2D spriteTexture2 = SpriteUtility.GetSpriteTexture(templateElement.Prefab, false);
-                GUI.Label(spriteRect, spriteTexture2, templateElement.Style);
-            }
-
-            templateElement.Style.contentOffset = originalOffset;
-
-            if (!isSelected)
-                EditorGUIUtility.AddCursorRect(spriteRect, MouseCursor.Link);
-
-            GUILayout.FlexibleSpace();
-            GUILayout.EndHorizontal();
-        }
-
-        public static bool DrawButton(string text, Object undoObject = null, bool shouldCollapse = true)
-        {
-            GUIContent content = new GUIContent(text);
-
-            Rect buttonRect = GUILayoutUtility.GetRect(content, ButtonStyle);
-
-            EditorGUI.BeginChangeCheck();
-            bool value = GUI.Button(buttonRect, content, ButtonStyle);
-            if (EditorGUI.EndChangeCheck() && (undoObject != null))
-            {
-                Undo.RegisterCompleteObjectUndo(undoObject, $"[{bHapticsOSCIntegration.SystemName}] Clicked {text}");
-                if (shouldCollapse)
-                    Undo.CollapseUndoOperations(Undo.GetCurrentGroup());
-            }
-
-            EditorGUIUtility.AddCursorRect(buttonRect, MouseCursor.Link);
-
-            return value;
-        }
-
-        public static bool DrawHeaderButton(string text, Object undoObject = null, bool shouldCollapse = true)
-        {
-            GUIContent content = new GUIContent(text);
-
-            Rect buttonRect = GUILayoutUtility.GetRect(content, HeaderButtonStyle);
-            buttonRect.width = HeaderButtonStyle.CalcSize(content).x + 6;
-
-            Vector2 originalOffset = HeaderButtonStyle.contentOffset;
-            HeaderButtonStyle.contentOffset = Vector2.zero;
-            buttonRect.x += originalOffset.x;
-            buttonRect.y += originalOffset.y;
-
-            EditorGUI.BeginChangeCheck();
-            bool value = GUI.Button(buttonRect, content, HeaderButtonStyle);
-            if (EditorGUI.EndChangeCheck() && (undoObject != null))
-            {
-                Undo.RegisterCompleteObjectUndo(undoObject, $"[{bHapticsOSCIntegration.SystemName}] Clicked {text}");
-                if (shouldCollapse)
-                    Undo.CollapseUndoOperations(Undo.GetCurrentGroup());
-            }
-            HeaderButtonStyle.contentOffset = originalOffset;
-
-            EditorGUIUtility.AddCursorRect(buttonRect, MouseCursor.Link);
-
-            return value;
-        }
-
-        public static Vector3 DrawVector3Field(string name, Vector3 currentValue, Object undoObject = null, System.Action onChangeCallback = null)
-        {
-            EditorGUI.BeginChangeCheck();
-            Vector3 newValue = EditorGUILayout.Vector3Field(name, currentValue);
-            GUILayout.Space(6);
-            if (EditorGUI.EndChangeCheck())
-            {
-                if (undoObject != null)
-                {
-                    Undo.RecordObject(undoObject, $"[{bHapticsOSCIntegration.SystemName}] Changed {name}");
-                    Undo.CollapseUndoOperations(Undo.GetCurrentGroup());
-                }
-                if (onChangeCallback != null)
-                    onChangeCallback();
-            }
-            return newValue;
-        }
-
-        public static Color DrawColorField(string name, Color currentValue, Object undoObject = null)
-        {
-            EditorGUI.BeginChangeCheck();
-            Color newValue = EditorGUILayout.ColorField(name, currentValue);
-            GUILayout.Space(6);
-            if (EditorGUI.EndChangeCheck() && (undoObject != null))
-            {
-                Undo.RecordObject(undoObject, $"[{bHapticsOSCIntegration.SystemName}] Changed {name}");
-                Undo.CollapseUndoOperations(Undo.GetCurrentGroup());
-            }
-            return newValue;
-        }
-
-        public enum HelpBoxType
-        {
-            NotReadyToApply,
-        }
-        public static void DrawHelpBox(HelpBoxType type, string additionalText = null)
-        {
-            string msg = null;
-            MessageType messageType = MessageType.None;
-
-            switch (type)
-            {
-                case HelpBoxType.NotReadyToApply:
-                    messageType = MessageType.Warning;
-                    msg = "Nothing is Added!\nPlease add at least 1 Device to Integrate into the Avatar.";
-                    goto default;
-
-                default:
-                    break;
-            }
-            if (string.IsNullOrEmpty(msg))
-                return;
-
-            EditorGUILayout.HelpBox(msg, messageType);
-            EditorGUILayout.Space();
-        }
     }
 }
 #endif

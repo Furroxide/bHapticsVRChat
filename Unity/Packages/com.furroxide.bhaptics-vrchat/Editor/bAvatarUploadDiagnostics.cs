@@ -102,8 +102,18 @@ namespace bHapticsOSC.VRChat
 
         private static string BuildCompanionWarning(bCompanionStatusResult result)
         {
-            string summary = bCompanionStatusGUI.GetSummary(result);
-            string details = bCompanionStatusGUI.GetDetails(result);
+            // The same wording the setup window shows, from the same place - this used to be a
+            // second copy of the status string table that could drift away from it.
+            bSetupStep step = bSetupModel.DescribeCompanion(result);
+
+            // Keep the title even when there is a detail sentence to go with it. In the window the
+            // two are drawn together and the row is under a heading, so the detail alone is enough;
+            // here the line lands in a console among VRCFury's build output, where "Installed, but
+            // not running." on its own does not say what is not running.
+            string summary = string.IsNullOrWhiteSpace(step.Detail)
+                ? step.Title
+                : $"{step.Title} - {step.Detail}";
+            string details = step.Explanation;
             string message = string.IsNullOrWhiteSpace(details)
                 ? summary
                 : $"{summary}\n{details}";

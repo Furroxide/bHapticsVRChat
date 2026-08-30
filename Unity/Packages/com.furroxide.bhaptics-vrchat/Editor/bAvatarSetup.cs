@@ -144,7 +144,7 @@ namespace bHapticsOSC.VRChat
                 return false;
             }
 
-            bEditorGUI.EnsureUserSettings(integration);
+            bSetupPipeline.EnsureUserSettings(integration);
 
             // Someone who already picked devices and spent time positioning them keeps every one
             // of those choices; only a genuinely fresh avatar gets the defaults.
@@ -179,7 +179,7 @@ namespace bHapticsOSC.VRChat
                     SeedDevices(integration, plan);
 
                 AutoFit(integration, plan);
-                bEditorGUI.RunSetupPipeline(integration);
+                bSetupPipeline.Run(integration);
                 Undo.CollapseUndoOperations(undoGroup);
                 return true;
             }
