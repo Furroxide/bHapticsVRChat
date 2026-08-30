@@ -157,7 +157,15 @@ namespace bHapticsOSC.VRChat
                 return Vector3.zero;
 
             Transform bone = animator == null ? null : animator.GetBoneTransform(Bone);
-            return bone == null ? CurrentPrefab.transform.localPosition : bone.InverseTransformPoint(CurrentPrefab.transform.position);
+            if (bone == null)
+                return CurrentPrefab.transform.localPosition;
+
+            // Mirror of ApplyBoneLocalTransform: the offset from the bone, de-rotated into the
+            // avatar's frame rather than the bone's, so what the inspector fields show survives a
+            // round trip on any rig.
+            Vector3 offset = Quaternion.Inverse(animator.transform.rotation)
+                             * (CurrentPrefab.transform.position - bone.position);
+            return Divide(offset, bone.lossyScale);
         }
 
         public Vector3 GetBoneLocalEulerAngles(Animator animator)
@@ -168,7 +176,7 @@ namespace bHapticsOSC.VRChat
             Transform bone = animator == null ? null : animator.GetBoneTransform(Bone);
             Quaternion localRotation = bone == null
                 ? CurrentPrefab.transform.localRotation
-                : Quaternion.Inverse(bone.rotation) * CurrentPrefab.transform.rotation;
+                : Quaternion.Inverse(animator.transform.rotation) * CurrentPrefab.transform.rotation;
             return localRotation.eulerAngles;
         }
 
@@ -211,8 +219,16 @@ namespace bHapticsOSC.VRChat
                 return;
             }
 
-            target.position = bone.TransformPoint(localPosition);
-            target.rotation = bone.rotation * Quaternion.Euler(localEulerAngles);
+            // The stored values are avatar-aligned offsets anchored at the bone, not values in the
+            // bone's own axes. Humanoid rigs do not agree on bone orientation - this was found on
+            // an avatar whose chest bone points down +X, where composing with bone.rotation turned
+            // the vest 90 degrees to face sideways. The prefabs were authored against a rig whose
+            // bones happened to be world-aligned, which is why the authored rotations are small
+            // tilts rather than yaw corrections, and why this frame is the one they were always
+            // written in. On such rigs the two compositions agree, so nothing moves there.
+            Quaternion avatarRotation = animator.transform.rotation;
+            target.position = bone.position + avatarRotation * Vector3.Scale(bone.lossyScale, localPosition);
+            target.rotation = avatarRotation * Quaternion.Euler(localEulerAngles);
             SetWorldScale(target, Vector3.Scale(bone.lossyScale, localScale));
         }
 

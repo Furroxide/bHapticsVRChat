@@ -278,13 +278,21 @@ namespace bHapticsOSC.VRChat
                 targetHeight / referenceSize.y,
                 targetDepth / referenceSize.z));
 
+            // The vest faces where the avatar faces, not where the chest bone points - bone axes
+            // are rig-specific and carry no meaning of their own. The authored rotation is the
+            // small deliberate tilt on the prefab, applied in the avatar's frame, which matches
+            // how SetBoneLocalTransform now interprets it.
             Quaternion localRotation = GetDefaultLocalRotation(userSettings.CurrentPrefab);
-            Quaternion targetWorldRotation = anchorTransform.rotation * localRotation;
+            Quaternion targetWorldRotation = editorComp.transform.rotation * localRotation;
             Vector3 targetWorldScale = Vector3.Scale(anchorTransform.lossyScale, targetScale);
             Vector3 targetCenterWorld = editorComp.transform.TransformPoint(targetCenterLocal);
             Vector3 targetRootWorldPosition = targetCenterWorld - (targetWorldRotation * Vector3.Scale(referenceBounds.center, targetWorldScale));
 
-            Vector3 anchorLocalPosition = anchorTransform.InverseTransformPoint(targetRootWorldPosition);
+            // Mirrors the avatar-aligned frame of SetBoneLocalTransform, so the value stored here
+            // reproduces targetRootWorldPosition exactly when it is applied.
+            Vector3 anchorLocalPosition = Divide(
+                Quaternion.Inverse(editorComp.transform.rotation) * (targetRootWorldPosition - anchorTransform.position),
+                anchorTransform.lossyScale);
             Vector3 anchorLocalEulerAngles = localRotation.eulerAngles;
 
             Undo.RecordObject(prefabTransform, $"[{bHapticsOSCIntegration.SystemName}] Auto-Fit Vest");
@@ -559,6 +567,15 @@ namespace bHapticsOSC.VRChat
                 Mathf.Clamp(scale.x, MinScale, MaxScale),
                 Mathf.Clamp(scale.y, MinScale, MaxScale),
                 Mathf.Clamp(scale.z, MinScale, MaxScale));
+        }
+
+        /// <summary>Per-axis division with bUserSettings' zero-guard semantics, for inverting a lossy scale.</summary>
+        private static Vector3 Divide(Vector3 left, Vector3 right)
+        {
+            return new Vector3(
+                right.x == 0 ? 0 : left.x / right.x,
+                right.y == 0 ? 0 : left.y / right.y,
+                right.z == 0 ? 0 : left.z / right.z);
         }
 
         private static Quaternion GetDefaultLocalRotation(GameObject currentPrefab)
