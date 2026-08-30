@@ -9,7 +9,7 @@ This guide covers the normal user setup for running bHaptics in VRChat and addin
 - Unity `2022.3.22f1` for avatar setup
 - VRChat SDK 3.0 / Avatars SDK, installed through VRChat Creator Companion
 - [VRCFury](https://vrcfury.com/), installed through VCC from `https://vcc.vrcfury.com/`
-- bHaptics VRChatOSC, installed through VCC from `https://vpm.furroxide.dev/index.json`
+- bHaptics VRChatOSC, installed through VCC from `https://furroxide.github.io/bHapticsVRChat/index.json`
 
 ## Use an Existing bHaptics Avatar
 
@@ -75,7 +75,7 @@ warnings on those editor platforms.
 1. Create or open your avatar project in VRChat Creator Companion.
 2. Make sure the project uses Unity `2022.3.22f1`.
 3. Add the VRCFury VCC repository: `https://vcc.vrcfury.com/`.
-4. Add the [bHaptics VRChatOSC repository](https://vpm.furroxide.dev/) to VCC. Its manual repository URL is `https://vpm.furroxide.dev/index.json`.
+4. Add the bHaptics VRChatOSC repository to VCC using `https://furroxide.github.io/bHapticsVRChat/index.json`.
 5. From **Manage Project**, add or resolve the VRChat Avatars SDK and VRCFury, then install **bHaptics VRChatOSC** (`com.furroxide.bhaptics-vrchat`).
 6. Open the Unity project.
 7. Open **bHapticsOSC > Setup Assistant** and confirm the companion app is compatible. Use the explicit browser or locate actions if it is missing.

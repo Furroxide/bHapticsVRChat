@@ -1,75 +1,76 @@
+<p align="center">
+  <img src="./assets/readme/hero.png" alt="bHaptics VRChatOSC hero showing a VRChat avatar contact signal and the Unity Setup Assistant status for supported bHaptics gear" width="100%">
+</p>
+
 # bHaptics VRChatOSC
-This project is designed to use bHaptics devices in VRChat.
 
-Please read **[How to play VRChat with bHaptics](https://bhaptics.notion.site/How-to-play-VRChat-with-bHaptics-1226d5724b8b80229ab9e0001ab70b61)** before attempting to use.
+Bring VRChat touch and impact feedback to supported bHaptics gear through a guided Unity package and Windows OSC companion.
 
-### Files
-- [bHaptics Player](https://www.bhaptics.com/support/downloads)
-- [bHaptics VRChatOSC](https://github.com/furroxide/bHapticsVRChat/releases/latest/download/bHapticsOSC.exe)
-- [bHaptics VRChatOSC VCC Repository](https://vpm.furroxide.dev/)
+bHaptics VRChatOSC is the Furroxide-maintained fork of the original integration. It pairs a VCC avatar package with a Windows companion app, adds a guided Setup Assistant, and uses VRCFury to keep generated avatar changes separate from your own controllers and menus.
 
-### Guides
-- [Setting Up](docs/setting-up.md)
-- [Upgrading](docs/upgrading.md)
+> [!WARNING]
+> **Preview:** This maintained fork remains an end-to-end test build. Expect rough edges until the project is declared stable.
 
-### Quick Guide
-- **Run** both [bHaptics Player](https://www.bhaptics.com/support/downloads) and [bHaptics VRChatOSC](https://github.com/furroxide/bHapticsVRChat/releases/latest/download/bHapticsOSC.exe).
-- **Enable OSC** in VRChat from **Action Menu → OSC → Enabled**. See VRChat's [OSC overview](https://docs.vrchat.com/docs/osc-overview).
-- **Enter** [bHaptics Avatar World](https://vrchat.com/home/world/wrld_7b1fed5e-50da-4263-b68a-81344fab1ac7), or **Update** your avatar by referring to [How to Upload an Avatar with bHaptics Devices (PC)](https://bhaptics.notion.site/How-to-Upload-an-Avatar-with-bHaptics-Devices-PC-c0479c68b8984b9d9048423b8c44f503) / [How to Upload an Avatar with bHaptics Devices (Quest)](https://bhaptics.notion.site/How-to-Upload-an-Avatar-with-bHaptics-Devices-Quest-1356d5724b8b8090bae4e89cae7eb696).
-  - This project uses [VRCFury](https://vrcfury.com/) for non-destructive avatar integration. Add the VRCFury VCC repository (`https://vcc.vrcfury.com/`) first.
-  - Add the [bHaptics VRChatOSC VCC repository](https://vpm.furroxide.dev/) and install `bHaptics VRChatOSC` from **Manage Project** in VCC.
-  - In Unity, open **bHapticsOSC > Setup Assistant**. It finds a running or downloaded companion app on its own; use **Find automatically** to search again, or **Locate existing app** to pick a `bHapticsOSC.exe` yourself. **Download matching version** starts that download directly and **Latest release** opens in your browser. The assistant never downloads or starts an app automatically, and asks before closing one.
-  - The official bHaptics app (`bHapticsOSC_v2.2.1.exe` and older) is a *different build*, not an older version: it cannot decode this package's compressed contact parameters, so haptics stay silent. The assistant flags it as an unsupported build and offers to close it. See [Upgrading](docs/upgrading.md).
-  - In Unity, use **Create VRCFury Setup** from the bHapticsOSC Integration inspector. The setup is contained under the `bHapticsOSC VRCFury` object; after deleting that object and saving and closing its scene, the generated assets are removed.
+## Choose your path
 
-### License
-bHaptics VRChatOSC is licensed under the GPL-3.0 License. 
-- This project is based on bHapticsOSC.
-  - bHapticsOSC is licensed under the GPL-3.0 License.
-- Third-party tools:
-  - [VRCFury](https://vrcfury.com/) is an external VCC dependency and is not redistributed with this repository.
+### Play with a supported avatar
 
-### Export Unity Packages
-- From PowerShell: run `.\Tools\Build-VpmPackage.ps1` to create the VCC/VPM ZIP.
-  - Default output: `dist\com.furroxide.bhaptics-vrchat-<version>.zip`.
-- From PowerShell: run `.\Tools\Export-UnityPackage.ps1`.
-  - Default output: `dist\bHapticsOSC-VRChat.unitypackage`.
-  - The script stages the canonical VPM content in the legacy `Assets` layout before asking Unity to export it.
-  - Unity must not already have the project open when using the CLI export.
-  - The `.unitypackage` is a fallback for projects that do not use the VPM package. Do not install both formats in one project.
-  - VRChat SDK and VRCFury remain external VCC/VPM dependencies and are not bundled.
+1. Install [bHaptics Player](https://www.bhaptics.com/support/downloads), pair your devices, and leave it running.
+2. Download and run the maintained [bHapticsOSC companion app](https://github.com/furroxide/bHapticsVRChat/releases/latest/download/bHapticsOSC.exe).
+3. In VRChat, turn on **Action Menu → OSC → Enabled**.
+4. Use an avatar with bHapticsOSC support and keep both desktop apps open while you play.
 
-### Build Artifacts
-- Merges and direct pushes to `main` publish a GitHub Release automatically when `VERSION`, `CHANGELOG.md`, package metadata, the Setup Assistant's fallback requirement, and the Windows executable's product/file version agree on a new version.
-- Before the first VCC release, set the repository's **Settings → Pages → Source** to **GitHub Actions**. The successful release then publishes the VPM listing automatically.
-- The user-facing download link remains `https://github.com/furroxide/bHapticsVRChat/releases/latest/download/bHapticsOSC.exe`.
-- Pull requests targeting `main` build temporary artifacts for review automatically:
-  - `bHapticsOSC.exe` as a single packaged Windows executable.
-  - `com.furroxide.bhaptics-vrchat-<version>.zip` for VCC/VPM distribution.
-  - `package.json` as the standalone VPM manifest.
-  - `bHapticsOSC-VRChat.unitypackage` from the Unity project.
-- Pull requests targeting `main` must bump `VERSION` and add a matching top `CHANGELOG.md` entry before merge.
-- The PR artifact workflow updates one sticky pull request comment with artifact links after a successful automatic or manual build.
-- Unity package CI uses GameCI with Unity `2022.3.22f1`. Configure `UNITY_LICENSE`, `UNITY_EMAIL`, and `UNITY_PASSWORD` for the `unity-pr-artifacts` environment as required by your Unity license type.
+### Add bHaptics to your avatar
 
-### Contributing
-- See [CONTRIBUTING.md](CONTRIBUTING.md) for the cross-platform line-ending policy and repository hygiene guidelines.
+1. Open a humanoid avatar project in VRChat Creator Companion using Unity `2022.3.22f1`.
+2. Add the VRCFury VCC repository (`https://vcc.vrcfury.com/`) and the [bHaptics VRChatOSC repository](https://furroxide.github.io/bHapticsVRChat/index.json).
+3. From **Manage Project**, install **bHaptics VRChatOSC**, then open the project in Unity.
+4. Select the avatar root and open **bHapticsOSC → Setup Assistant**. Review the proposal, run its one-action avatar setup, and upload through the VRChat SDK.
 
-### Links
-- [How to play VRChat with bHaptics](https://bhaptics.notion.site/How-to-play-VRChat-with-bHaptics-1226d5724b8b80229ab9e0001ab70b61)
-- [bHaptics Avatar World](https://vrchat.com/home/world/wrld_7b1fed5e-50da-4263-b68a-81344fab1ac7)
-- [bHaptics Official Website](https://www.bhaptics.com)
+The Setup Assistant promotes the next action that needs attention. It can install or locate the companion app, check bHaptics Player and VRChat OSC, fit devices to the selected avatar, and build the VRCFury setup as one undoable operation.
 
-### Featured Avatars
-- V2(PC Only)
-    - [Angry](https://vrchat.com/home/avatar/avtr_339ec708-e98b-4126-9d94-28a1bdc86a02)
-    - [Kyle](https://vrchat.com/home/avatar/avtr_20a3eb95-3bed-4266-8d15-63fba1a621bb)
-    - [Cool Banana](https://vrchat.com/home/avatar/avtr_e180f519-bb64-4f49-891a-4387d21fc722)
-    - [Robin](https://vrchat.com/home/avatar/avtr_7dcf8a1d-eff9-4bc1-8cc8-d28b53d229c0)
-    - [Sally](https://vrchat.com/home/avatar/avtr_ba91803b-b4ef-4a72-87db-e2cff5c583d2)
-- V2M(Quest & PC)
-    - [Angry](https://vrchat.com/home/avatar/avtr_30c7a479-2889-4713-a3c8-b81c21ef1543)
-    - [Kyle](https://vrchat.com/home/avatar/avtr_bb7d5b0a-ad9f-4594-ab21-b2d0b51c87d9)
-    - [Cool Banana](https://vrchat.com/home/avatar/avtr_a7ec00b0-e94a-4cec-b1fe-f5abff08683e)
-    - [Robin](https://vrchat.com/home/avatar/avtr_086453dd-d275-4b46-94c9-02aa0d35272d)
-    - [Sally](https://vrchat.com/home/avatar/avtr_7cf7dda5-59c4-47a5-8f81-6304290d3867)
+## Coming Soon
+
+Want to help shape what comes next? Sponsors get early access and help choose future VRChat feature integrations through private sponsor updates. [Sponsor Furroxide on GitHub →](https://github.com/sponsors/furroxide)
+
+## How it works
+
+**Avatar contacts → VRChat OSC → bHapticsOSC companion → bHaptics Player → bHaptics gear**
+
+When an avatar creator opts into Contact Compressor, the avatar build replaces dense contact grids with compact positional receivers. With or without that optional compression, VRChat sends contact positions over OSC, the maintained companion translates them into device motor output, and bHaptics Player drives the paired hardware.
+
+The Unity Setup Assistant observes each part of that chain and reports whether the companion, Player, OSC configuration, project dependencies, and selected avatar are ready.
+
+## Compatibility and limits
+
+| Area | Requirement or limitation |
+| --- | --- |
+| Companion app | `bHapticsOSC.exe` runs on Windows and must run on the same Windows PC as VRChat. The Unity assistant remains available on macOS and Linux for guidance, but it cannot run the companion there. |
+| Avatar project | Unity `2022.3.22f1`, VRChat Avatars SDK `3.10.x`, and VRCFury `1.1341.0` or newer in the `1.x` series. |
+| Avatar platforms | The package includes PC and Quest-compatible avatar assets. Quest-compatible describes the uploaded avatar assets; it does not make the Windows companion available on standalone Quest. |
+| Installation | VCC/VPM is recommended. A legacy `.unitypackage` is available as a fallback; never install both formats in the same project. |
+| Companion lineage | The official `bHapticsOSC_v2.2.1.exe` and older releases are a different build. They do not understand this fork's optional compressed-contact parameters, so use the maintained download linked above. |
+
+## Guides and support
+
+- [Set up bHaptics VRChatOSC](docs/setting-up.md)
+- [Upgrade an existing installation](docs/upgrading.md)
+- [Understand Contact Compressor](docs/contact-compression.md)
+- [Read VRChat's OSC overview](https://docs.vrchat.com/docs/osc-overview)
+- [Download the latest release](https://github.com/furroxide/bHapticsVRChat/releases/latest)
+- [Report a bug or request help](https://github.com/furroxide/bHapticsVRChat/issues)
+
+<details>
+<summary>Legacy resources</summary>
+
+- The [bHaptics Avatar World](https://vrchat.com/home/world/wrld_7b1fed5e-50da-4263-b68a-81344fab1ac7) is retained as a legacy resource, not the primary setup or validation path for this maintained fork.
+
+</details>
+
+## Development
+
+See [Development](docs/development.md) for cloning, building, testing, packaging, release artifacts, and versioning instructions. Before contributing, also read [CONTRIBUTING.md](CONTRIBUTING.md) for the repository's line-ending and generated-file policies.
+
+## License
+
+bHaptics VRChatOSC is licensed under [GPL-3.0-only](LICENSE.md) and is based on the original bHapticsOSC project. [VRCFury](https://vrcfury.com/) is an external VCC dependency and is not redistributed here.
