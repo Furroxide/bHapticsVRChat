@@ -100,6 +100,31 @@ If VCC/VPM installation is not available, download and import `bHapticsOSC-VRCha
 
 Use only one installation format in a project. Do not import the legacy `.unitypackage` when `com.furroxide.bhaptics-vrchat` is already installed through VCC.
 
+## Optimising an Avatar That Has Haptics
+
+Avatar optimisation tools and hand edits can break the haptics setup in ways that stay invisible
+until someone is wearing the gear. The parts that matter:
+
+- **Do not rename or reparent `bHapticsOSC VRCFury` or the device objects under it.** The
+  generated animations address renderers by their path from the avatar root, so a moved or
+  renamed vest keeps receiving OSC while its touch visuals and mesh toggles silently stop
+  animating. If a tool restructured the hierarchy, re-run the setup - see
+  [Regenerate an Existing Avatar Setup](upgrading.md#regenerate-an-existing-avatar-setup) -
+  rather than repairing paths by hand.
+- **Leave the contact receivers alone.** Mesh merging and component-stripping tools sometimes
+  remove or rename `VRC Contact Receiver` components. The quick check after any optimisation
+  pass: select a few nodes under the vest and confirm each still shows a parameter of the form
+  `bOSC/v2/<Device>/<Node>/self` or `/others`, in self/others pairs. A node with only half the
+  pair responds to your own touch or everyone else's, but not both.
+- **Know what the package tests do and do not cover.** The Editor tests in
+  `bHapticsOSC.VRChat.Editor.Tests` (Window > General > Test Runner, EditMode) verify the
+  *shipped prefabs* against the companion app's address table, and CI runs them on every pull
+  request. They do not inspect your avatar's instances - an optimiser that damages the copy on
+  your avatar passes them untouched, which is why the receiver spot-check above exists.
+- **Re-upload after regenerating.** Nothing takes effect in game until the avatar is uploaded
+  again, and the companion app should be running before the avatar is next loaded so VRChat
+  republishes its OSC config.
+
 ## Notes
 
 - The VPM package and legacy Unity package do not bundle the VRChat SDK or VRCFury. Keep those dependencies managed by VCC.
