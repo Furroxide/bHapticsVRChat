@@ -1,8 +1,19 @@
 # Changelog
 
-## [Unreleased]
+## [2.4.1] - 2026-09-03
 
 ### Fixed
+- The companion app never starting. `bHapticsOSC.exe` exited before printing anything, on every
+  launch and every machine, including the published 2.4.0 build, so nothing in that release could
+  be felt at all. A field initializer ran ahead of the static constructor that sets the config
+  folder, so the contact-compression loader read a null path and threw before `Main` began.
+  Nothing before 2.4.0 reached that loader from there, which is why the first test build was the
+  first to hit it. The loader now treats a missing folder as "no manifest" rather than a crash.
+- The companion app dying on a malformed OSC packet. Any program on the machine able to send a UDP
+  datagram to the receive port could stop it, and stray traffic that merely looked like an OSC
+  message could do it by accident. The app vanished with no console output, leaving only a Windows
+  error dialog. Unusable packets are now dropped and summarised on the console, at most once every
+  five seconds, and a fault in any worker thread stops that worker rather than the whole process.
 - Per-node touch on the desktop **Without Mesh** device column, which never reached the hardware.
   Every receiver in that column was named in a `bOSC_v1_<Device>_<Node>` form - `bOSC_v1_Head_3`,
   `bOSC_v1_VestFront_7`, and so on - while the companion app subscribes to
@@ -19,6 +30,9 @@
   the documentation had just told them to add.
 
 ### Upgrade notes
+- **Everyone needs the new companion app.** The 2.4.0 executable could not start at all, so
+  replace it regardless of what else on this list applies to you. Let the Setup Assistant install
+  it, or download `bHapticsOSC.exe` from this release. The avatar-side notes below are separate.
 - **Only avatars built from the desktop "Without Mesh" column need anything.** That column is
   reached by unticking **Show mesh** on a device; the default is on. The desktop "With Mesh"
   column and both Quest columns were already on the v2 scheme and are untouched, as are punch
@@ -44,6 +58,9 @@
 - Have the companion app running the next time you load the avatar in VRChat. It clears VRChat's
   cached per-avatar OSC config on avatar change, which is what makes VRChat publish the new
   parameter names.
+- The VCC listing address is now `https://furroxide.github.io/bHapticsVRChat/index.json`. The
+  earlier `vpm.furroxide.dev` address no longer resolves; if you added it to VCC, remove it
+  and add the new one.
 
 ## [2.4.0] - 2026-08-28
 
@@ -111,7 +128,7 @@ https://github.com/furroxide/bHapticsVRChat/issues
 
 ### Upgrade notes
 - There is no previous release to upgrade from; this is the first one.
-- Install through VCC from https://vpm.furroxide.dev/index.json, or import the
+- Install through VCC from https://furroxide.github.io/bHapticsVRChat/index.json, or import the
   `.unitypackage` if you are not using VCC. Do not use both formats in one project.
 - The companion app is a separate Windows program. Let the Setup Assistant install it, or
   download `bHapticsOSC.exe` from this release.

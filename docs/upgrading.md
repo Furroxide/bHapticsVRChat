@@ -33,7 +33,7 @@ you want to carry your device settings over.
 
 1. Back up or version-control your avatar project before updating packages.
 2. Open the avatar project through VRChat Creator Companion.
-3. Make sure the VRCFury repository (`https://vcc.vrcfury.com/`) and bHaptics repository (`https://vpm.furroxide.dev/index.json`) are added to VCC.
+3. Make sure the VRCFury repository (`https://vcc.vrcfury.com/`) and bHaptics VRChatOSC repository (`https://furroxide.github.io/bHapticsVRChat/index.json`) are added to VCC.
 4. From **Manage Project**, resolve the VRChat Avatars SDK and VRCFury, then update **bHaptics VRChatOSC**.
 5. Confirm the project opens in Unity `2022.3.22f1` and let Unity finish compiling before changing the avatar setup.
 6. Open **bHapticsOSC > Setup Assistant** and confirm the located companion app satisfies the updated package requirement.
@@ -43,7 +43,7 @@ The bHapticsOSC package expects VRCFury to come from its VCC repository. Do not 
 ### Move a Legacy Installation to VCC
 
 1. Back up or version-control the avatar project and close Unity.
-2. Add the VRCFury and bHaptics repositories to VCC.
+2. Add the VRCFury and bHaptics VRChatOSC repositories to VCC.
 3. Install **bHaptics VRChatOSC** from **Manage Project**.
 4. Reopen Unity and let the package migration and compilation finish.
 
