@@ -11,7 +11,7 @@ namespace bHapticsOSC.VRChat
 {
     public static class bCompanionRequirements
     {
-        public const string FallbackRequiredVersion = "2.4.0";
+        public const string FallbackRequiredVersion = "2.4.1";
         public const string PackageId = "com.furroxide.bhaptics-vrchat";
         public const string VrchatAvatarsPackageId = "com.vrchat.avatars";
         public const string VrcFuryPackageId = "com.vrcfury.vrcfury";
