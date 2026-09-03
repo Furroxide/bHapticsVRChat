@@ -8,8 +8,8 @@ Bring VRChat touch and impact feedback to supported bHaptics gear through a guid
 
 bHaptics VRChatOSC is the Furroxide-maintained fork of the original integration. It pairs a VCC avatar package with a Windows companion app, adds a guided Setup Assistant, and uses VRCFury to keep generated avatar changes separate from your own controllers and menus.
 
-> [!WARNING]
-> **Preview:** This maintained fork remains an end-to-end test build. Expect rough edges until the project is declared stable.
+> [!NOTE]
+> **First stable release.** The preview period is over. This is a young project with a small user base, so if something does not work on your setup, please [open an issue](https://github.com/furroxide/bHapticsVRChat/issues) and it will be looked at.
 
 ## Choose your path
 

@@ -1,5 +1,27 @@
 # Changelog
 
+## [3.0.0] - 2026-09-03
+
+The first release published as a finished project rather than a test build. The haptics path is
+the same code as 2.4.1, so nothing you feel in VRChat changes. What does change is the version
+itself: the Setup Assistant now asks for a 3.0.0 companion, and a 2.4.1 companion is reported as
+out of date until you update it.
+
+### Changed
+- The project is no longer labelled a preview. Every step of the chain has now been exercised
+  end to end: installing through VCC, setting an avatar up, installing and running the companion
+  app, and publishing a release that the VCC listing picks up on its own. The last defect that
+  made a published build unusable was found and fixed in 2.4.1.
+- The README asks anyone who hits a problem to open an issue, in place of the warning that told
+  readers to expect rough edges.
+
+### Upgrade notes
+- From 2.4.1 there is nothing to do beyond updating the package and the companion app together.
+  The Setup Assistant will ask for the 3.0.0 companion.
+- From 2.4.0 or earlier, read the 2.4.1 notes below before updating. That release replaced a
+  companion app that could not start at all, and avatars built from the desktop "Without Mesh"
+  column need their setup re-run.
+
 ## [2.4.1] - 2026-09-03
 
 ### Fixed
