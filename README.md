@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.png" alt="bHaptics VRChatOSC hero showing a VRChat avatar contact signal and the Unity Setup Assistant status for supported bHaptics gear" width="100%">
+  <img src="./assets/readme/hero.png" alt="bHaptics VRChatOSC hero showing a VRChat avatar contact signal and the Unity Setup Assistant status for supported bHaptics gear">
 </p>
 
 # bHaptics VRChatOSC

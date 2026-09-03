@@ -44,6 +44,9 @@
 - Have the companion app running the next time you load the avatar in VRChat. It clears VRChat's
   cached per-avatar OSC config on avatar change, which is what makes VRChat publish the new
   parameter names.
+- The VCC listing address is now `https://furroxide.github.io/bHapticsVRChat/index.json`. The
+  earlier `vpm.furroxide.dev` address no longer resolves; if you added it to VCC, remove it
+  and add the new one.
 
 ## [2.4.0] - 2026-08-28
 
@@ -111,7 +114,7 @@ https://github.com/furroxide/bHapticsVRChat/issues
 
 ### Upgrade notes
 - There is no previous release to upgrade from; this is the first one.
-- Install through VCC from https://vpm.furroxide.dev/index.json, or import the
+- Install through VCC from https://furroxide.github.io/bHapticsVRChat/index.json, or import the
   `.unitypackage` if you are not using VCC. Do not use both formats in one project.
 - The companion app is a separate Windows program. Let the Setup Assistant install it, or
   download `bHapticsOSC.exe` from this release.
