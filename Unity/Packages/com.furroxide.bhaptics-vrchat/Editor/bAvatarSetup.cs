@@ -128,6 +128,7 @@ namespace bHapticsOSC.VRChat
             bHapticsOSCIntegration integration = avatar.GetComponentInChildren<bHapticsOSCIntegration>(true);
             bool adopting = integration != null;
 
+            Undo.IncrementCurrentGroup();
             int undoGroup = Undo.GetCurrentGroup();
             Undo.SetCurrentGroupName("Set up bHapticsOSC on " + avatar.name);
 
@@ -176,9 +177,11 @@ namespace bHapticsOSC.VRChat
             try
             {
                 if (!hasExistingChoices)
+                {
                     SeedDevices(integration, plan);
+                    AutoFit(integration, plan);
+                }
 
-                AutoFit(integration, plan);
                 bSetupPipeline.Run(integration);
                 Undo.CollapseUndoOperations(undoGroup);
                 return true;

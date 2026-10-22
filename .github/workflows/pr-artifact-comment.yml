@@ -63,6 +63,7 @@ jobs:
               { label: 'bHapticsOSC.exe', find: item => item.name === 'bHapticsOSC.exe' },
               { label: 'bHapticsOSC-VRChat.unitypackage', find: item => item.name === 'bHapticsOSC-VRChat.unitypackage' },
               { label: 'VPM package ZIP', find: item => /^com\.furroxide\.bhaptics-vrchat-\d+\.\d+\.\d+\.zip$/.test(item.name) },
+              { label: 'Contact Compressor VPM ZIP', find: item => /^com\.furroxide\.contact-compressor-\d+\.\d+\.\d+\.zip$/.test(item.name) },
               { label: 'VPM package.json', find: item => item.name === 'package.json' },
             ];
 

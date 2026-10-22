@@ -4,6 +4,7 @@ using Furroxide.ContactCompressor.Editor;
 using NUnit.Framework;
 using UnityEditor.Animations;
 using UnityEngine;
+using UnityEngine.TestTools;
 using VRC.Dynamics;
 using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
@@ -291,6 +292,23 @@ namespace Furroxide.ContactCompressor.Tests
             var avatar = NewObject("Avatar");
             var descriptor = avatar.AddComponent<VRCAvatarDescriptor>();
 
+            var sourceParameters = ScriptableObject.CreateInstance<VRCExpressionParameters>();
+            _spawned.Add(sourceParameters);
+            sourceParameters.parameters = new[]
+            {
+                new VRCExpressionParameters.Parameter
+                {
+                    name = "bOSC/v3/Torso/Xp",
+                    valueType = VRCExpressionParameters.ValueType.Float,
+                    saved = true,
+                    defaultValue = 1f,
+                    networkSynced = true
+                }
+            };
+            descriptor.expressionParameters = sourceParameters;
+            descriptor.customExpressions = false;
+            descriptor.customizeAnimationLayers = false;
+
             var controller = new AnimatorController();
             _spawned.Add(controller);
             descriptor.baseAnimationLayers = new[]
@@ -320,12 +338,18 @@ namespace Furroxide.ContactCompressor.Tests
                                    "bOSC/v3/Torso/Zp", "bOSC/v3/Torso/Zn" };
 
             Assert.IsNotNull(descriptor.expressionParameters);
+            Assert.IsTrue(descriptor.customExpressions);
+            Assert.IsTrue(descriptor.customizeAnimationLayers);
+            Assert.IsTrue(sourceParameters.parameters[0].saved, "the source asset must be preserved");
+            Assert.AreEqual(1f, sourceParameters.parameters[0].defaultValue);
             foreach (string name in expected)
             {
                 var parameter = descriptor.expressionParameters.parameters.FirstOrDefault(p => p.name == name);
                 Assert.IsNotNull(parameter, $"{name} was not declared");
                 Assert.AreEqual(VRCExpressionParameters.ValueType.Float, parameter.valueType);
                 Assert.IsFalse(parameter.networkSynced, "these are local; they must not cost synced bits");
+                Assert.IsFalse(parameter.saved, "a saved contact would buzz on avatar load");
+                Assert.AreEqual(0f, parameter.defaultValue);
             }
 
             var fx = (AnimatorController)descriptor.baseAnimationLayers[0].animatorController;
@@ -351,6 +375,77 @@ namespace Furroxide.ContactCompressor.Tests
 
             Assert.IsTrue(new ContactCompressorHook().OnPreprocessAvatar(avatar));
             Assert.AreEqual(before, avatar.GetComponentsInChildren<ContactReceiver>(true).Length);
+        }
+
+        [Test]
+        public void HookRejectsDuplicateRegionsBeforeRemovingReceivers()
+        {
+            var avatar = NewObject("Avatar");
+            avatar.AddComponent<VRCAvatarDescriptor>();
+            BuildVestGroup(out var firstRoot);
+            firstRoot.transform.SetParent(avatar.transform, false);
+            BuildVestGroup(out var secondRoot);
+            secondRoot.transform.SetParent(avatar.transform, false);
+
+            LogAssert.Expect(LogType.Error,
+                "[Contact Compressor] Torso: Region id 'Torso' is used by more than one group on this avatar.");
+            Assert.IsFalse(new ContactCompressorHook().OnPreprocessAvatar(avatar));
+            Assert.AreEqual(160, avatar.GetComponentsInChildren<ContactReceiver>(true).Length);
+        }
+
+        [Test]
+        public void HookRejectsOverlappingSourceRootsBeforeRemovingReceivers()
+        {
+            var avatar = NewObject("Avatar");
+            avatar.AddComponent<VRCAvatarDescriptor>();
+            var sourceRoot = NewObject("Sources", avatar.transform);
+            BuildPanel("VestFront", sourceRoot.transform, 0.12f, 1, 1);
+            foreach (string id in new[] { "First", "Second" })
+            {
+                var group = NewObject(id, avatar.transform).AddComponent<ContactCompressorGroup>();
+                group.regionId = id;
+                group.sourceRoot = sourceRoot.transform;
+            }
+
+            LogAssert.Expect(LogType.Error,
+                "[Contact Compressor] Second: Receiver 'bOSC/v2/VestFront/0/self' is claimed by more than one group.");
+            LogAssert.Expect(LogType.Error,
+                "[Contact Compressor] Second: Receiver 'bOSC/v2/VestFront/0/others' is claimed by more than one group.");
+            Assert.IsFalse(new ContactCompressorHook().OnPreprocessAvatar(avatar));
+            Assert.AreEqual(2, avatar.GetComponentsInChildren<ContactReceiver>(true).Length);
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void HookRejectsReferencesOutsideTheAvatar(bool externalFrame)
+        {
+            var avatar = NewObject("Avatar");
+            avatar.AddComponent<VRCAvatarDescriptor>();
+            var group = BuildVestGroup(out var root);
+            root.transform.SetParent(avatar.transform, false);
+            var external = NewObject("Other avatar");
+            if (externalFrame) group.frameOverride = external.transform;
+            else group.sourceRoot = external.transform;
+
+            LogAssert.Expect(LogType.Error,
+                "[Contact Compressor] Torso: Source root and frame must belong to this avatar.");
+            Assert.IsFalse(new ContactCompressorHook().OnPreprocessAvatar(avatar));
+            Assert.AreEqual(80, avatar.GetComponentsInChildren<ContactReceiver>(true).Length);
+            Assert.AreEqual(0, external.GetComponentsInChildren<ContactReceiver>(true).Length);
+        }
+
+        [Test]
+        public void ManifestRejectsDuplicateRegionsAndMixedPrefixes()
+        {
+            var first = ContactRegionFitter.Fit(BuildVestGroup(out _));
+            var second = ContactRegionFitter.Fit(BuildVestGroup(out _));
+            Assert.Throws<System.InvalidOperationException>(() =>
+                ContactCompressorManifestBuilder.Build(new[] { first, second }));
+
+            second.Group.regionId = "Other";
+            second.Group.parameterPrefix = "other/prefix";
+            Assert.Throws<System.InvalidOperationException>(() =>
+                ContactCompressorManifestBuilder.Build(new[] { first, second }));
         }
 
         [Test]

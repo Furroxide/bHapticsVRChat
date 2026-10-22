@@ -53,6 +53,9 @@ namespace Furroxide.ContactCompressor
             public static Sender Sphere(Vec at, float radius)
                 => new Sender { Pos0 = at, Pos1 = at, Radius = radius };
 
+            /// <param name="centre">Centre of the capsule in metres.</param>
+            /// <param name="length">Total capsule length, including both caps, in metres.</param>
+            /// <param name="radius">Capsule radius in metres.</param>
             /// <param name="tiltDegrees">Rotation of the capsule axis within the XY plane; 0 is along +Y.</param>
             public static Sender Capsule(Vec centre, float length, float radius, float tiltDegrees)
             {

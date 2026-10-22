@@ -4,9 +4,10 @@ Replaces the per-motor contact receivers with a positional encoder. The avatar s
 *"motor 7 is being touched"* and starts saying *"you are being touched here"*, and the companion app
 works out which motors that means.
 
-**Status: preview.** The maths and the decoder are covered by tests and validated against VRChat's
-own collision code. The Unity editor code compiles against the real SDK but has not yet been run
-through an actual avatar build. Expect to find things.
+**Status: optional preview.** The maths and decoder are covered by tests against VRChat's collision
+code. Unity EditMode tests exercise the fitter, emitted receivers, and avatar preprocess hook
+against SDK `3.10.4`. In-game behavior and physical motor output still need a smoke test on the
+release candidate; passing editor tests does not establish hardware compatibility.
 
 ## Why
 
@@ -88,8 +89,8 @@ Without a manifest the app behaves exactly as before, so an uncompressed avatar 
 
 ## Known gaps
 
-- The Unity editor path has not been run yet. The build hook, the fitter and the emitter compile
-  but are unexercised.
+- Automated tests exercise the Unity build hook, fitter and emitter. A full VRChat upload and
+  physical-device smoke test remain separate release checks.
 - Punch still uses its own 80 receivers. Consolidating those needs the app to correlate an impact
   with the live position, which is not built yet.
 - Hands and feet stay on the per-motor path.

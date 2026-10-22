@@ -12,6 +12,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $LegacyRootGuid = 'aa20f348b2d0ed2438d3fc45ceb17fe6'
+$LegacyLicenseGuid = 'a3e58a8aee804a248c7d189e0ccc5d6d'
 
 function Resolve-FullPath([string]$Path) {
     $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
@@ -159,6 +160,18 @@ function New-StagedUnityProject(
         param($File)
         $File.Name -notlike '*.asmdef' -and $File.Name -notlike '*.asmdef.meta'
     }
+
+    # The legacy archive distributes the same GPL sources as VPM and needs its
+    # license too. Use a separate stable GUID so migrating to VPM cannot collide
+    # with the canonical package's license asset.
+    $licenseSource = Join-Path $CanonicalPackage 'LICENSE.md'
+    if (-not (Test-Path -LiteralPath $licenseSource -PathType Leaf)) {
+        throw "Canonical package license is missing: $licenseSource"
+    }
+    # Unity imports .txt as a TextAsset; .md can be omitted by asset discovery.
+    Copy-Item -LiteralPath $licenseSource -Destination (Join-Path $legacyRoot 'LICENSE.txt')
+    $licenseMeta = "fileFormatVersion: 2`nguid: $LegacyLicenseGuid`nTextScriptImporter:`n  externalObjects: {}`n  userData:`n  assetBundleName:`n  assetBundleVariant:`n"
+    [IO.File]::WriteAllText((Join-Path $legacyRoot 'LICENSE.txt.meta'), $licenseMeta, [Text.UTF8Encoding]::new($false))
 
     # The VPM Runtime folder needs its own GUID because migration deliberately
     # leaves the legacy root in place when it contains user-generated assets.

@@ -76,6 +76,37 @@ namespace Furroxide.ContactCompressor.Tests
             Assert.ThrowsAny<Exception>(() => ManifestJson.Parse(input));
         }
 
+        [Theory]
+        [InlineData(@"{""version"": 1.5}")]
+        [InlineData(@"{""version"": -1}")]
+        [InlineData(@"{""version"": 2147483648}")]
+        [InlineData(@"{""version"": ""1""}")]
+        [InlineData(@"{""regions"": {}}")]
+        [InlineData(@"{""regions"": [null]}")]
+        [InlineData(@"{""regions"": [{""points"": [null]}]}")]
+        [InlineData(@"{""regions"": [{""boxExtents"": [1, 2]}]}")]
+        [InlineData(@"{""regions"": [{""boxExtents"": [1, ""2"", 3]}]}")]
+        [InlineData(@"{""regions"": [{""boxExtents"": [1, 2, 1e40]}]}")]
+        [InlineData(@"{""regions"": [{""points"": [{""u"": 1e40}]}]}")]
+        [InlineData(@"{""version"": 1, ""version"": 2}")]
+        [InlineData(@"{""ignored"": +1}")]
+        [InlineData(@"{""ignored"": 01}")]
+        [InlineData(@"{""ignored"": .5}")]
+        [InlineData(@"{""ignored"": 1.}")]
+        [InlineData(@"{""ignored"": 1e9999}")]
+        [InlineData("{\"generator\": \"line\nbreak\"}")]
+        public void RejectsCorruptManifestValues(string input)
+        {
+            Assert.Throws<FormatException>(() => ManifestJson.Parse(input));
+        }
+
+        [Fact]
+        public void RejectsExcessiveNestingWithoutOverflowingTheStack()
+        {
+            string json = "{\"ignored\":" + new string('[', 1000) + "0" + new string(']', 1000) + "}";
+            Assert.Throws<FormatException>(() => ManifestJson.Parse(json));
+        }
+
         [Fact]
         public void HandlesEscapesAndUnicode()
         {

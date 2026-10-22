@@ -50,6 +50,17 @@ dotnet test Decoder\Furroxide.ContactCompressor.Decoder.Tests\Furroxide.ContactC
 3. Select **EditMode** and run all tests.
 4. Confirm both `bHapticsOSC.VRChat.Editor.Tests` and `Furroxide.ContactCompressor.Editor.Tests` complete successfully.
 
+The shared `Tests` workflow runs the decoder suite and both Unity package assemblies for PR
+artifacts and release candidates. Publication and the PR artifact-ready comment depend on those
+tests. Unity result validation rejects a missing assembly or an assembly with no passing tests;
+the 12 prefab-column skips describe variants the package does not ship. Windows-specific tests
+also skip on the Linux CI runner, so run the full suite on Windows before release.
+
+Build the companion before running the Windows Unity tests to exercise installer verification
+against the actual merged executable. CI reports are saved as `decoder-test-results` and
+`unity-test-results` artifacts. The Unity job uses the existing `unity-pr-artifacts` environment
+and its Unity license secrets.
+
 ## Validate release metadata
 
 Ordinary documentation, CI, tooling, and feature pull requests keep the current release version. Validate them with the unchanged-version allowance:

@@ -1,5 +1,44 @@
 # Changelog
 
+## [3.0.1] - 2026-10-22
+
+### Security
+- Restrict avatar OSC config cleanup to valid avatar IDs. Incoming avatar-change messages can
+  no longer supply filesystem paths, and a missing or inaccessible config folder no longer stops
+  the companion's haptics worker.
+
+### Fixed
+- The Setup Assistant rejecting the maintained companion because its executable is smaller than
+  1 MB. Downloads retain PE, product, exact-version, and content-length checks. Download stages
+  keep their update callback, and replacing an installed executable is atomic.
+- Corrupt contact manifests and invalid OSC proximity values poisoning the decoder or preventing
+  companion startup. Invalid geometry, duplicate region IDs, overflowing numbers, and excessive
+  JSON nesting are rejected.
+- Malformed companion configuration terminating startup or crashing the file-watcher thread
+  during reload. Rejected files retain defaults or the last usable settings and can be corrected
+  without losing the original file.
+- The Player WebSocket transport dropping valid frames split across TCP reads. Headers, length
+  fields, masks and payloads now read until complete or report a genuine end of stream.
+- Contact compression accepting overlapping source groups or references outside the avatar,
+  exporting incomplete/mixed manifests, leaving generated FX layers disabled, or restoring saved
+  contacts as active touches. Shared source assets remain unchanged.
+- Avatar setup refusing smaller valid device selections or including earlier edits in rollback.
+- Legacy installations failing to detect an installed Contact Compressor, and missing license
+  text in the compressor VPM and legacy Unity archives.
+
+### Changed
+- Release publication and artifact-ready comments now depend on decoder/companion and Unity
+  regression tests. Release lookup fails on authentication/service errors instead of treating
+  them as a missing release. Fork PR artifact comments include the compressor dependency ZIP.
+- Contact Compressor is now `0.1.2`; the avatar package requires that version or newer.
+
+### Upgrade notes
+- Update the avatar package and companion together to `3.0.1`. Re-run avatar setup and upload
+  to apply avatar-side fixes. For compressed contacts, copy the regenerated avatar manifest to
+  the companion's `Config/contact-compressor.json` and restart the companion.
+- Contact compression remains an optional preview. See the
+  [release smoke-test checklist](docs/release-smoke-test.md) for in-game and hardware validation.
+
 ## [3.0.0] - 2026-09-03
 
 The first release published as a finished project rather than a test build. The haptics path is

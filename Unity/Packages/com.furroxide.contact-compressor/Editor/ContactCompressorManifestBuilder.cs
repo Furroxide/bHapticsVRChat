@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -17,18 +18,25 @@ namespace Furroxide.ContactCompressor.Editor
             };
 
             bool prefixTaken = false;
+            var regionIds = new HashSet<string>(StringComparer.Ordinal);
 
             foreach (var fit in fits)
             {
                 if (fit == null || !fit.IsValid || fit.Group == null) continue;
 
-                // The manifest carries one prefix, so mixed prefixes across groups cannot be
-                // represented. Take the first and let the caller's validation surface the clash.
+                string prefix = string.IsNullOrWhiteSpace(fit.Group.parameterPrefix)
+                    ? ContactParameterNames.DefaultPrefix
+                    : fit.Group.parameterPrefix.Trim('/');
+                if (!regionIds.Add(fit.Group.regionId))
+                    throw new InvalidOperationException($"Region id '{fit.Group.regionId}' is used by more than one group.");
+
+                // A manifest has one namespace. Exporting a mixed layout would silently make
+                // every region after the first namespace impossible for the decoder to read.
+                if (prefixTaken && !string.Equals(prefix, manifest.prefix, StringComparison.Ordinal))
+                    throw new InvalidOperationException("All groups in a manifest must use the same parameter prefix.");
                 if (!prefixTaken)
                 {
-                    manifest.prefix = string.IsNullOrWhiteSpace(fit.Group.parameterPrefix)
-                        ? ContactParameterNames.DefaultPrefix
-                        : fit.Group.parameterPrefix.Trim('/');
+                    manifest.prefix = prefix;
                     prefixTaken = true;
                 }
 

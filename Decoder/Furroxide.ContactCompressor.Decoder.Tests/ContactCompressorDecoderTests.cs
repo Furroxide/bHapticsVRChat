@@ -197,6 +197,32 @@ namespace Furroxide.ContactCompressor.Tests
         }
 
         [Fact]
+        public void RejectsInvalidProximityWithoutChangingTheContact()
+        {
+            var decoder = Feed(VestManifest(), Sender.Sphere(ToMetres(0.4f, 0.6f, 0.95f), 0.04f));
+            Assert.True(decoder.TrySolve("Torso", out var before));
+
+            foreach (float value in new[] { float.NaN, float.PositiveInfinity, float.NegativeInfinity, -0.1f, 1.1f })
+                Assert.False(decoder.Accept("bOSC/v3/Torso/Xp", value));
+
+            Assert.True(decoder.TrySolve("Torso", out var after));
+            Assert.Equal(before.Position.X, after.Position.X);
+            Assert.Equal(before.Confidence, after.Confidence);
+            Assert.Equal(before.SenderRadius, after.SenderRadius);
+        }
+
+        [Fact]
+        public void RejectsAxesTheRegionDoesNotEmit()
+        {
+            var manifest = VestManifest();
+            manifest.regions[0].axes = "X";
+            var decoder = new ContactCompressorDecoder(manifest);
+
+            Assert.False(decoder.Accept("bOSC/v3/Torso/Yp", 0.7f));
+            Assert.True(decoder.Accept("bOSC/v3/Torso/Xp", 0.7f));
+        }
+
+        [Fact]
         public void ResetClearsState()
         {
             var manifest = VestManifest();
@@ -223,6 +249,38 @@ namespace Furroxide.ContactCompressor.Tests
             manifest.version = ContactCompressorManifest.CurrentVersion + 1;
 
             Assert.Throws<NotSupportedException>(() => new ContactCompressorDecoder(manifest));
+        }
+
+        [Fact]
+        public void RejectsDuplicateRegionsInsteadOfSilentlyReplacingTheLayout()
+        {
+            var manifest = VestManifest();
+            manifest.regions.Add(manifest.regions[0]);
+            Assert.Throws<ArgumentException>(() => new ContactCompressorDecoder(manifest));
+        }
+
+        [Theory]
+        [InlineData(float.NaN)]
+        [InlineData(float.PositiveInfinity)]
+        [InlineData(-1f)]
+        [InlineData(0f)]
+        public void RejectsInvalidGeometryBeforeAcceptingOsc(float extent)
+        {
+            var manifest = VestManifest();
+            manifest.regions[0].regionExtents[0] = extent;
+            Assert.Throws<ArgumentException>(() => new ContactCompressorDecoder(manifest));
+        }
+
+        [Fact]
+        public void RejectsInvalidPointsBeforeSampling()
+        {
+            var manifest = VestManifest();
+            manifest.regions[0].points.Add(null);
+            Assert.Throws<ArgumentException>(() => new ContactCompressorDecoder(manifest));
+
+            manifest = VestManifest();
+            manifest.regions[0].points[0].u = float.NaN;
+            Assert.Throws<ArgumentException>(() => new ContactCompressorDecoder(manifest));
         }
     }
 }
