@@ -14,6 +14,11 @@
 - Corrupt contact manifests and invalid OSC proximity values poisoning the decoder or preventing
   companion startup. Invalid geometry, duplicate region IDs, overflowing numbers, and excessive
   JSON nesting are rejected.
+- Malformed companion configuration terminating startup or crashing the file-watcher thread
+  during reload. Rejected files retain defaults or the last usable settings and can be corrected
+  without losing the original file.
+- The Player WebSocket transport dropping valid frames split across TCP reads. Headers, length
+  fields, masks and payloads now read until complete or report a genuine end of stream.
 - Contact compression accepting overlapping source groups or references outside the avatar,
   exporting incomplete/mixed manifests, leaving generated FX layers disabled, or restoring saved
   contacts as active touches. Shared source assets remain unchanged.

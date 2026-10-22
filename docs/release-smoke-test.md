@@ -5,6 +5,12 @@ Test the exact commit built by the `release/3.0.1` CI run, using companion `3.0.
 versions, bHaptics Player version, avatar ID, device models, and a pass/fail result for each item.
 Mark unavailable gear or platforms as **not tested**.
 
+The [offline smoke results](release-readiness.md#expanded-candidate-smoke-tests) already cover
+clean local imports, setup/Undo, both mesh variants, compression math, SDK preprocessing,
+Windows/Android bundle serialization, live-editor installer recovery, baseline/compressed OSC routing and simulated Player
+frames. Repeat the relevant checks below on the actual avatar and paired devices: those offline
+results do not establish fitting, uploaded-avatar behavior, tactile mapping or real recovery.
+
 ## Candidate installation, before publication
 
 - [ ] Download the executable and both VPM ZIP artifacts from the same successful CI run. Extract
@@ -67,6 +73,9 @@ Mark unavailable gear or platforms as **not tested**.
 
 - [ ] Restart the companion and bHaptics Player, reconnect a device, and toggle OSC off/on. Confirm
   recovery and inspect for stuck output, exceptions, duplicate processes, or a bound-port error.
+  Also leave the real Player connection running during a normal play session. The simulated
+  transport checks cover segmented TCP reads, but real connection loss or failed recovery still
+  blocks sign-off.
 - [ ] Test AFK/seated/in-station behavior against the configured reactivity settings, then return
   to normal play. Close the companion and confirm output stops.
 - [ ] With a temporary backup of the candidate config, try a malformed/newer manifest. The
