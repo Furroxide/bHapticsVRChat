@@ -42,14 +42,55 @@ namespace Furroxide.ContactCompressor
         public ContactCompressorDecoder(ContactCompressorManifest manifest)
         {
             _manifest = manifest ?? throw new ArgumentNullException(nameof(manifest));
-            if (manifest.version > ContactCompressorManifest.CurrentVersion)
+            if (manifest.version != ContactCompressorManifest.CurrentVersion)
                 throw new NotSupportedException(
-                    $"Manifest version {manifest.version} is newer than this decoder supports ({ContactCompressorManifest.CurrentVersion}).");
+                    $"Manifest version {manifest.version} is not supported; expected {ContactCompressorManifest.CurrentVersion}.");
 
             if (manifest.regions != null)
                 foreach (var region in manifest.regions)
-                    if (region != null && !string.IsNullOrEmpty(region.id))
-                        _regions[region.id] = new RegionState { Manifest = region };
+                {
+                    ValidateRegion(region);
+                    if (_regions.ContainsKey(region.id))
+                        throw new ArgumentException($"Duplicate region id '{region.id}'.", nameof(manifest));
+                    _regions.Add(region.id, new RegionState { Manifest = region });
+                }
+        }
+
+        static bool IsFinite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
+
+        static void ValidateRegion(ContactRegionManifest region)
+        {
+            if (region == null || string.IsNullOrWhiteSpace(region.id) || region.id.Contains("/"))
+                throw new ArgumentException("Each region must have a nonempty id without '/'.");
+            if (string.IsNullOrEmpty(region.axes) || region.ParsedAxes == EncoderAxes.None)
+                throw new ArgumentException($"Region '{region.id}' must encode at least one axis.");
+            foreach (char axis in region.axes)
+                if (axis != 'X' && axis != 'Y' && axis != 'Z')
+                    throw new ArgumentException($"Region '{region.id}' has an unknown axis '{axis}'.");
+
+            if (region.boxExtents == null || region.boxExtents.Length != 3
+                || region.regionExtents == null || region.regionExtents.Length != 3)
+                throw new ArgumentException($"Region '{region.id}' must have three box and region extents.");
+            for (int axis = 0; axis < 3; axis++)
+            {
+                float box = region.boxExtents[axis], extent = region.regionExtents[axis];
+                bool encoded = (region.ParsedAxes & ContactEncoderSolver.AxisFlag(axis)) != 0;
+                if (!IsFinite(box) || !IsFinite(extent) || box <= 0f || extent < 0f
+                    || box < extent || (encoded && extent <= 0f))
+                    throw new ArgumentException($"Region '{region.id}' has invalid extents on axis {axis}.");
+            }
+
+            if (region.points == null) return;
+            var pointIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var point in region.points)
+            {
+                if (point == null || string.IsNullOrWhiteSpace(point.id) || !pointIds.Add(point.id)
+                    || !IsFinite(point.u) || point.u < 0f || point.u > 1f
+                    || !IsFinite(point.v) || point.v < 0f || point.v > 1f
+                    || !IsFinite(point.w) || point.w < 0f || point.w > 1f
+                    || !IsFinite(point.radius) || point.radius < 0f)
+                    throw new ArgumentException($"Region '{region.id}' has an invalid or duplicate point.");
+            }
         }
 
         /// <summary>Region ids this decoder knows about.</summary>
@@ -61,6 +102,11 @@ namespace Furroxide.ContactCompressor
         /// </summary>
         public bool Accept(string parameterOrAddress, float value)
         {
+            // OSC floats are untrusted. Non-finite values can poison the solver and keep a
+            // phantom contact alive; proximity values outside [0,1] cannot come from a receiver.
+            if (float.IsNaN(value) || float.IsInfinity(value) || value < 0f || value > 1f)
+                return false;
+
             if (!ContactParameterNames.TryParse(parameterOrAddress, _manifest.prefix,
                                                 out string regionId, out int axis, out bool positive))
                 return false;
@@ -68,6 +114,7 @@ namespace Furroxide.ContactCompressor
             lock (_gate)
             {
                 if (!_regions.TryGetValue(regionId, out var state)) return false;
+                if ((state.Manifest.ParsedAxes & ContactEncoderSolver.AxisFlag(axis)) == 0) return false;
                 (positive ? state.Plus : state.Minus)[axis] = value;
                 return true;
             }

@@ -177,7 +177,7 @@ function Assert-VpmManifest([object]$Manifest, [string]$Version, [string]$Path) 
     Assert-ExactJsonMap $Manifest.vpmDependencies @{
         'com.vrchat.avatars' = '3.10.x'
         'com.vrcfury.vrcfury' = '>=1.1341.0 <2.0.0'
-        'com.furroxide.contact-compressor' = '>=0.1.0 <1.0.0'
+        'com.furroxide.contact-compressor' = '>=0.1.2 <1.0.0'
     } "VPM dependencies in $Path"
 
     Assert-ExactJsonMap $Manifest.legacyFolders @{

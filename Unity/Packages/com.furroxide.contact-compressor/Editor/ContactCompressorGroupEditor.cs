@@ -189,9 +189,25 @@ namespace Furroxide.ContactCompressor.Editor
             var fits = root != null
                 ? root.GetComponentsInChildren<ContactCompressorGroup>(true)
                       .Select(ContactRegionFitter.Fit)
-                      .Where(f => f.IsValid)
                       .ToList()
                 : new System.Collections.Generic.List<FittedRegion> { fit };
+
+            if (fits.Any(f => !f.IsValid))
+            {
+                Debug.LogError("[Contact Compressor] Fix all invalid groups before exporting the avatar manifest.");
+                return;
+            }
+
+            ContactCompressorManifest manifest;
+            try
+            {
+                manifest = ContactCompressorManifestBuilder.Build(fits);
+            }
+            catch (System.InvalidOperationException exception)
+            {
+                Debug.LogError($"[Contact Compressor] Cannot export manifest: {exception.Message}");
+                return;
+            }
 
             string path = EditorUtility.SaveFilePanel(
                 "Export contact compressor manifest",
@@ -201,7 +217,6 @@ namespace Furroxide.ContactCompressor.Editor
 
             if (string.IsNullOrEmpty(path)) return;
 
-            var manifest = ContactCompressorManifestBuilder.Build(fits);
             File.WriteAllText(path, ContactCompressorManifestBuilder.ToJson(manifest));
 
             Debug.Log($"[Contact Compressor] Wrote {manifest.regions.Count} region(s) to {path}");

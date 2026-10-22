@@ -121,5 +121,5 @@ need new generated VRCFury assets.
 
 - Use GitHub Release downloads for normal user updates.
 - Pull request artifacts are temporary review builds and expire according to the repository retention policy.
-- PR artifact names are `bHapticsOSC.exe`, `com.furroxide.bhaptics-vrchat-<version>.zip`, `package.json`, and `bHapticsOSC-VRChat.unitypackage`.
+- PR artifact names are `bHapticsOSC.exe`, `com.furroxide.bhaptics-vrchat-<version>.zip`, `com.furroxide.contact-compressor-<version>.zip`, `package.json`, and `bHapticsOSC-VRChat.unitypackage`. Decoder and Unity test reports are separate artifacts.
 - Release and pull request builds reject a Windows executable whose product name or file version does not match the release metadata.

@@ -32,17 +32,8 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      # Not every push to main is a release. Docs, CI and tooling commits land here too, and the
-      # validator rightly fails them - it refuses to re-publish a version that is already out.
-      # Failing is the correct answer on a pull request, where an unbumped version means someone is
-      # about to merge a release that cannot publish. On main, after that merge has happened, it
-      # just means the release already went out, so this skips the run rather than reporting a
-      # failure the maintainer can do nothing about.
-      # bash, not pwsh: the 404 here is an expected, load-bearing outcome, and Actions runs pwsh
-      # with $ErrorActionPreference='stop', which on PowerShell 7.4 turns a non-zero native exit
-      # into a terminating error. That would fail this step on exactly the path that means "this
-      # is a new release" - the first push of every version. `if ! cmd` is likewise exempt from
-      # bash's own -e.
+      # Ordinary pushes retain VERSION and skip publication. Only a confirmed 404
+      # means the release is missing; authentication and service failures must fail closed.
       - name: Decide whether this push is a release
         id: gate
         shell: bash
@@ -52,7 +43,11 @@ jobs:
           version="$(tr -d '[:space:]' < VERSION)"
           tag="v$version"
 
-          if ! draft="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .draft 2>/dev/null)"; then
+          if ! draft="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .draft 2>release-check-error.txt)"; then
+            if ! grep -Fq '(HTTP 404)' release-check-error.txt; then
+              cat release-check-error.txt >&2
+              exit 1
+            fi
             echo "No release exists for $tag yet; this push is a release."
             echo "should_release=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -86,6 +81,13 @@ jobs:
           path: release-notes.md
           if-no-files-found: error
           retention-days: 7
+
+  tests:
+    name: Test release packages
+    needs: validate
+    if: needs.validate.outputs.should_release == 'true'
+    uses: ./.github/workflows/tests.yml
+    secrets: inherit
 
   build-exe:
     name: Build bHapticsOSC.exe
@@ -267,6 +269,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - validate
+      - tests
       - build-exe
       - build-unity-package
       - build-vpm-package

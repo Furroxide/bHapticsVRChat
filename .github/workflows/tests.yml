@@ -1,0 +1,76 @@
+name: Tests
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  decoder:
+    name: Decoder regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Run decoder tests
+        run: >-
+          dotnet test Decoder/Furroxide.ContactCompressor.Decoder.Tests/Furroxide.ContactCompressor.Decoder.Tests.csproj
+          --configuration Release --logger "trx;LogFileName=decoder.trx"
+          --results-directory artifacts/decoder
+      - name: Preserve test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: decoder-test-results
+          path: artifacts/decoder
+          if-no-files-found: error
+          retention-days: 14
+
+  unity:
+    name: Unity EditMode regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: unity-pr-artifacts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Resolve VPM packages
+        uses: anatawa12/sh-actions/resolve-vpm-packages@1d155c7a26bcd0a54ffd9cb38fd66ab0d32d23cd
+        with:
+          project-path: Unity
+          repos: |
+            https://vcc.vrcfury.com/
+      - name: Remove unused VRChat SDK samples
+        run: rm -rf Unity/Packages/com.vrchat.avatars/Samples Unity/Packages/com.vrchat.avatars/Samples.meta
+      - name: Run both package test assemblies
+        id: tests
+        uses: game-ci/unity-test-runner@5817131b76378ee08ad4cde3067af92d7c66f864 # v4.2.0
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: Unity
+          unityVersion: 2022.3.22f1
+          testMode: editmode
+          customParameters: -assemblyNames "bHapticsOSC.VRChat.Editor.Tests;Furroxide.ContactCompressor.Editor.Tests"
+          artifactsPath: artifacts/unity-tests
+          githubToken: ''
+      - name: Require results from both test assemblies
+        shell: pwsh
+        run: ./Tools/Validate-UnityTestResults.ps1 -ResultsPath artifacts/unity-tests
+      - name: Preserve test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-test-results
+          path: artifacts/unity-tests
+          if-no-files-found: error
+          retention-days: 14

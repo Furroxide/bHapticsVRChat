@@ -1,11 +1,83 @@
 using System;
+using System.Collections;
 using System.IO;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Networking;
+using UnityEngine.TestTools;
 
 namespace bHapticsOSC.VRChat.Tests
 {
+    public class bCompanionInstallerTests
+    {
+        [Test]
+        public void SubMegabyteDownloadReachesExecutableVerification()
+        {
+            string path = Path.Combine(Path.GetTempPath(), $"bhaptics-size-test-{Guid.NewGuid():N}.part");
+            try
+            {
+                File.WriteAllBytes(path, new byte[602112]);
+                Assert.IsFalse(bCompanionInstaller.Verify(path, "3.0.0", 602112, out string reason));
+                Assert.That(reason, Does.Contain("not a Windows program"),
+                    "the published app's size must pass the coarse length filter");
+                Assert.IsFalse(bCompanionInstaller.Verify(path, "3.0.0", 602113, out reason));
+                Assert.That(reason, Does.Contain("did not arrive complete"));
+            }
+            finally { File.Delete(path); }
+        }
+
+        [Test]
+        public void BuiltCompanionPassesVerificationWithItsExactVersion()
+        {
+            if (Application.platform != RuntimePlatform.WindowsEditor)
+                Assert.Ignore("Executable status inspection requires the Windows editor.");
+            string path = Path.GetFullPath(Path.Combine(Application.dataPath,
+                "../../External/bHapticsOSC/Output/Release/bHapticsOSC.exe"));
+            if (!File.Exists(path))
+                Assert.Ignore("Build the Windows companion before testing its executable.");
+
+            string version = bCompanionRequirements.RequiredVersion;
+            Assert.IsTrue(bCompanionInstaller.Verify(path, version, new FileInfo(path).Length, out string reason), reason);
+            Assert.IsFalse(bCompanionInstaller.Verify(path, "0.0.1", 0, out reason));
+            Assert.That(reason, Does.Contain("not 0.0.1"));
+        }
+
+        [UnityTest]
+        public IEnumerator SuccessiveRequestsAreBothPumpedAndCancellationReleasesTheInstaller()
+        {
+            string path = Path.Combine(Path.GetTempPath(), $"bhaptics-pump-test-{Guid.NewGuid():N}.txt");
+            File.WriteAllText(path, "test");
+            try
+            {
+                foreach (var phase in new[] { bCompanionInstaller.bInstallPhase.Checking,
+                                             bCompanionInstaller.bInstallPhase.Downloading })
+                {
+                    bCompanionInstaller.StartRequest(UnityWebRequest.Get(new Uri(path).AbsoluteUri), phase);
+                    double deadline = EditorApplication.timeSinceStartup + 5;
+                    while (bCompanionInstaller.IsBusy && EditorApplication.timeSinceStartup < deadline)
+                        yield return null;
+                    Assert.IsFalse(bCompanionInstaller.IsBusy, "each request must retain its editor update callback");
+                    // file:// is deliberately not an HTTP 200: both requests finish through
+                    // the failure path, without touching an installed app or external service.
+                    Assert.That(bCompanionInstaller.Phase, Is.EqualTo(bCompanionInstaller.bInstallPhase.Failed));
+                }
+
+                bCompanionInstaller.StartRequest(UnityWebRequest.Get(new Uri(path).AbsoluteUri),
+                    bCompanionInstaller.bInstallPhase.Downloading);
+                bCompanionInstaller.Cancel();
+                Assert.IsFalse(bCompanionInstaller.IsBusy);
+                Assert.That(bCompanionInstaller.Phase, Is.EqualTo(bCompanionInstaller.bInstallPhase.Idle));
+            }
+            finally
+            {
+                bCompanionInstaller.Cancel();
+                bCompanionInstaller.Dismiss();
+                File.Delete(path);
+            }
+        }
+    }
+
     public class bCompanionStatusDetectorTests
     {
         [TestCase("2.3.1", "2.3.1")]

@@ -98,6 +98,10 @@ upload.
 
 If VCC/VPM installation is not available, download and import `bHapticsOSC-VRChat.unitypackage` from the latest GitHub Release after resolving the VRChat SDK and VRCFury in VCC.
 
+The legacy archive does not include Contact Compressor. To use optional contact compression with
+this format, install **Contact Compressor** (`com.furroxide.contact-compressor`) from the bHaptics
+VCC listing as well. Unity detects it after compilation and enables the compression controls.
+
 Use only one installation format in a project. Do not import the legacy `.unitypackage` when `com.furroxide.bhaptics-vrchat` is already installed through VCC.
 
 ## Optimising an Avatar That Has Haptics

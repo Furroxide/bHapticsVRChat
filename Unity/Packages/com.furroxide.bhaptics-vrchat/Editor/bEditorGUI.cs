@@ -758,6 +758,7 @@ namespace bHapticsOSC.VRChat
             // One undo group for the whole pipeline. It creates objects, moves the user's
             // device prefabs, adds components and writes assets; without this, backing out
             // means dozens of separate Ctrl+Z presses through a half-built setup.
+            Undo.IncrementCurrentGroup();
             int undoGroup = Undo.GetCurrentGroup();
             Undo.SetCurrentGroupName("Create bHapticsOSC VRCFury setup");
 

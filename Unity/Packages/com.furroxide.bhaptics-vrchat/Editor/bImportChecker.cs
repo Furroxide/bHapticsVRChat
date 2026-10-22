@@ -11,6 +11,7 @@ namespace bHapticsOSC.VRChat
     public static class bImportChecker
     {
         private const string HasVrcFuryDefine = "bHapticsOSC_HasVrcFury";
+        private const string HasContactCompressorDefine = "bHapticsOSC_HasContactCompressor";
 
         private static readonly string[] DeprecatedDefines =
         {
@@ -42,11 +43,17 @@ namespace bHapticsOSC.VRChat
                 definitions.RemoveAll(definition => definition == deprecatedDefine);
 
             definitions.RemoveAll(definition => definition == HasVrcFuryDefine);
+            definitions.RemoveAll(definition => definition == HasContactCompressorDefine);
             // VPM and UPM installations receive this symbol from asmdef
             // versionDefines. Only the asmdef-free legacy export needs a
             // project-wide scripting define fallback.
-            if (!IsCanonicalPackageAssembly() && HasVrcFury())
-                definitions.Add(HasVrcFuryDefine);
+            if (!IsCanonicalPackageAssembly())
+            {
+                if (HasType("com.vrcfury.api", "com.vrcfury.api.FuryComponents"))
+                    definitions.Add(HasVrcFuryDefine);
+                if (HasType("Furroxide.ContactCompressor", "Furroxide.ContactCompressor.ContactCompressorGroup"))
+                    definitions.Add(HasContactCompressorDefine);
+            }
 
             string updated = string.Join(";", definitions);
             if (!string.Equals(current, updated, StringComparison.Ordinal))
@@ -66,17 +73,17 @@ namespace bHapticsOSC.VRChat
             }
         }
 
-        private static bool HasVrcFury()
+        private static bool HasType(string assemblyName, string typeName)
         {
             foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
-                if (assembly.GetType("com.vrcfury.api.FuryComponents") != null)
+                if (assembly.GetType(typeName) != null)
                     return true;
             }
 
             try
             {
-                return Assembly.Load("com.vrcfury.api").GetType("com.vrcfury.api.FuryComponents") != null;
+                return Assembly.Load(assemblyName).GetType(typeName) != null;
             }
             catch
             {

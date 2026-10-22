@@ -35,7 +35,9 @@ namespace bHapticsOSC.VRChat
         private const string InstallFolderName = "bHapticsOSC";
 
         private const int TimeoutSeconds = 20;
-        private const long MinimumPlausibleBytes = 1L * 1024L * 1024L;
+        // The merged 3.0.0 executable is 602,112 bytes. This is only a coarse
+        // error-page filter; the PE header, product and exact version verify identity.
+        private const long MinimumPlausibleBytes = 64L * 1024L;
         private const long MaximumPlausibleBytes = 64L * 1024L * 1024L;
 
         private static UnityWebRequest request;
@@ -87,19 +89,22 @@ namespace bHapticsOSC.VRChat
                 return;
             }
 
-            expectedVersion = version;
+            if (!bCompanionStatusDetector.TryNormalizeVersion(
+                    string.IsNullOrWhiteSpace(version) ? bCompanionRequirements.RequiredVersion : version,
+                    out _, out expectedVersion))
+            {
+                Fail("The requested companion version is invalid.");
+                return;
+            }
             InstalledPath = string.Empty;
             Progress = 0f;
             Phase = bInstallPhase.Checking;
             Message = "Checking for the download...";
 
-            string url = bCompanionRequirements.GetMatchingDownloadUrl(version);
-            request = UnityWebRequest.Head(url);
-            request.timeout = TimeoutSeconds;
-            request.SendWebRequest();
-
-            EditorApplication.update -= Pump;
-            EditorApplication.update += Pump;
+            string url = bCompanionRequirements.GetMatchingDownloadUrl(expectedVersion);
+            var preflight = UnityWebRequest.Head(url);
+            preflight.timeout = TimeoutSeconds;
+            StartRequest(preflight, bInstallPhase.Checking);
         }
 
         internal static void Cancel()
@@ -123,6 +128,25 @@ namespace bHapticsOSC.VRChat
 
         // ------------------------------------------------------------------ the pump
 
+        // Both requests must keep the editor pump alive. Releasing the HEAD request removes
+        // the callback, so starting the GET without registering it again strands the download.
+        internal static void StartRequest(UnityWebRequest nextRequest, bInstallPhase phase)
+        {
+            Release();
+            request = nextRequest;
+            Phase = phase;
+            LockReload();
+            EditorApplication.update += Pump;
+            try
+            {
+                request.SendWebRequest();
+            }
+            catch (Exception exception)
+            {
+                Fail($"Could not start the download. {exception.Message}");
+            }
+        }
+
         private static void Pump()
         {
             if (request == null)
@@ -135,6 +159,12 @@ namespace bHapticsOSC.VRChat
             {
                 if (Phase == bInstallPhase.Downloading)
                 {
+                    if (request.downloadedBytes > (ulong)MaximumPlausibleBytes)
+                    {
+                        Fail("The download exceeded the maximum app size and was discarded.");
+                        return;
+                    }
+
                     Progress = expectedLength > 0
                         ? Mathf.Clamp01(request.downloadedBytes / (float)expectedLength)
                         : 0f;
@@ -146,10 +176,17 @@ namespace bHapticsOSC.VRChat
                 return;
             }
 
-            if (Phase == bInstallPhase.Checking)
-                FinishPreflight();
-            else if (Phase == bInstallPhase.Downloading)
-                FinishDownload();
+            try
+            {
+                if (Phase == bInstallPhase.Checking)
+                    FinishPreflight();
+                else if (Phase == bInstallPhase.Downloading)
+                    FinishDownload();
+            }
+            catch (Exception exception)
+            {
+                Fail($"Could not complete the installation. {exception.Message}");
+            }
         }
 
         private static void FinishPreflight()
@@ -195,10 +232,8 @@ namespace bHapticsOSC.VRChat
                 return;
             }
 
-            Release();
-
             var handler = new DownloadHandlerFile(partPath) { removeFileOnAbort = true };
-            request = new UnityWebRequest(
+            var download = new UnityWebRequest(
                 bCompanionRequirements.GetMatchingDownloadUrl(expectedVersion),
                 UnityWebRequest.kHttpVerbGET,
                 handler,
@@ -206,13 +241,11 @@ namespace bHapticsOSC.VRChat
 
             // No request timeout: a slow connection is not an error. The editor stays responsive
             // because this is pumped rather than waited on.
-            request.timeout = 0;
+            download.timeout = 0;
 
-            LockReload();
-            Phase = bInstallPhase.Downloading;
             Progress = 0f;
             Message = "Downloading...";
-            request.SendWebRequest();
+            StartRequest(download, bInstallPhase.Downloading);
         }
 
         private static void FinishDownload()
@@ -230,7 +263,7 @@ namespace bHapticsOSC.VRChat
             Phase = bInstallPhase.Verifying;
             Message = "Checking the download...";
 
-            if (!Verify(partPath, out string reason))
+            if (!Verify(partPath, expectedVersion, expectedLength, out string reason))
             {
                 SafeDelete(partPath);
                 Fail(reason);
@@ -242,9 +275,9 @@ namespace bHapticsOSC.VRChat
                 // Only now does the file get the name the rest of the tool looks for, so a
                 // cancelled or half-written download can never be mistaken for an install.
                 if (File.Exists(targetPath))
-                    File.Delete(targetPath);
-
-                File.Move(partPath, targetPath);
+                    File.Replace(partPath, targetPath, null);
+                else
+                    File.Move(partPath, targetPath);
             }
             catch (Exception exception)
             {
@@ -268,7 +301,7 @@ namespace bHapticsOSC.VRChat
         /// version resource last matters: an HTML error page saved under this name has no version
         /// resource at all, and the detector would read that absence as a build it recognises.
         /// </summary>
-        private static bool Verify(string path, out string reason)
+        internal static bool Verify(string path, string requiredVersion, long requiredLength, out string reason)
         {
             reason = string.Empty;
 
@@ -297,7 +330,7 @@ namespace bHapticsOSC.VRChat
                 return false;
             }
 
-            if (expectedLength > 0 && length != expectedLength)
+            if (requiredLength > 0 && length != requiredLength)
             {
                 reason = "The download did not arrive complete. It was discarded.";
                 return false;
@@ -312,13 +345,14 @@ namespace bHapticsOSC.VRChat
             bCompanionStatusResult inspected = bCompanionStatusDetector.InspectExecutable(
                 path,
                 false,
-                bCompanionRequirements.RequiredVersion);
+                requiredVersion);
 
-            if (!inspected.IsReady)
+            if (!inspected.IsReady
+                || bCompanionStatusDetector.CompareVersions(inspected.DetectedVersion, requiredVersion) != 0)
             {
                 reason = inspected.Lineage == bCompanionBuildLineage.Supported
                     ? $"The download identifies itself as version {inspected.DetectedVersion}, not "
-                      + $"{expectedVersion}. It was discarded rather than installed."
+                      + $"{requiredVersion}. It was discarded rather than installed."
                     : "The download is not the companion app this package needs, so it was discarded.";
                 return false;
             }

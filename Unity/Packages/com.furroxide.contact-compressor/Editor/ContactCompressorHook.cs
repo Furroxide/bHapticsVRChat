@@ -53,15 +53,35 @@ namespace Furroxide.ContactCompressor.Editor
 
             var fits = new List<FittedRegion>();
             var usedRegionIds = new HashSet<string>(System.StringComparer.Ordinal);
+            var usedReceivers = new HashSet<ContactReceiver>();
 
             foreach (var group in groups)
             {
                 if (group == null) continue;
 
+                if (!group.ResolvedSourceRoot.IsChildOf(avatarGameObject.transform)
+                    || !group.ResolvedFrame.IsChildOf(avatarGameObject.transform))
+                {
+                    Debug.LogError($"[Contact Compressor] {group.regionId}: Source root and frame must belong to this avatar.", group);
+                    return false;
+                }
+
                 var fit = ContactRegionFitter.Fit(group);
 
                 if (!string.IsNullOrWhiteSpace(group.regionId) && !usedRegionIds.Add(group.regionId))
+                {
                     fit.Errors.Add($"Region id '{group.regionId}' is used by more than one group on this avatar.");
+                    fit.IsValid = false;
+                }
+
+                foreach (var point in fit.Points)
+                {
+                    if (point.Receiver != null && !usedReceivers.Add(point.Receiver))
+                    {
+                        fit.Errors.Add($"Receiver '{point.Parameter}' is claimed by more than one group.");
+                        fit.IsValid = false;
+                    }
+                }
 
                 foreach (var warning in fit.Warnings)
                     Debug.LogWarning($"[Contact Compressor] {group.regionId}: {warning}", group);
@@ -167,6 +187,8 @@ namespace Furroxide.ContactCompressor.Editor
                         return false;
                     }
                     already.networkSynced = false;
+                    already.saved = false;
+                    already.defaultValue = 0f;
                     continue;
                 }
 
@@ -182,6 +204,7 @@ namespace Furroxide.ContactCompressor.Editor
 
             clone.parameters = existing.ToArray();
             descriptor.expressionParameters = clone;
+            descriptor.customExpressions = true;
             return true;
         }
 
@@ -249,6 +272,7 @@ namespace Furroxide.ContactCompressor.Editor
             layer.isDefault = false;
             layers[fxIndex] = layer;
             descriptor.baseAnimationLayers = layers;
+            descriptor.customizeAnimationLayers = true;
 
             return true;
         }

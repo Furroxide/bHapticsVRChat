@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Furroxide.ContactCompressor
 {
@@ -29,19 +30,26 @@ namespace Furroxide.ContactCompressor
             if (!(root is Dictionary<string, object> map))
                 throw new FormatException("Manifest root must be an object.");
 
+            double version = GetNumber(map, "version", ContactCompressorManifest.CurrentVersion);
+            if (version < 1 || version > int.MaxValue || version != Math.Truncate(version))
+                throw new FormatException("Manifest version must be a positive integer.");
+
             var manifest = new ContactCompressorManifest
             {
-                version = (int)GetNumber(map, "version", ContactCompressorManifest.CurrentVersion),
+                version = (int)version,
                 prefix = GetString(map, "prefix", ContactParameterNames.DefaultPrefix),
                 generator = GetString(map, "generator", ""),
                 regions = new List<ContactRegionManifest>()
             };
 
-            if (map.TryGetValue("regions", out object regions) && regions is List<object> regionList)
+            if (map.TryGetValue("regions", out object regions))
             {
+                if (!(regions is List<object> regionList))
+                    throw new FormatException("Manifest regions must be an array.");
                 foreach (object entry in regionList)
                 {
-                    if (!(entry is Dictionary<string, object> r)) continue;
+                    if (!(entry is Dictionary<string, object> r))
+                        throw new FormatException("Each manifest region must be an object.");
 
                     var region = new ContactRegionManifest
                     {
@@ -52,18 +60,21 @@ namespace Furroxide.ContactCompressor
                         points = new List<ContactPointManifest>()
                     };
 
-                    if (r.TryGetValue("points", out object points) && points is List<object> pointList)
+                    if (r.TryGetValue("points", out object points))
                     {
+                        if (!(points is List<object> pointList))
+                            throw new FormatException("Region points must be an array.");
                         foreach (object p in pointList)
                         {
-                            if (!(p is Dictionary<string, object> pt)) continue;
+                            if (!(p is Dictionary<string, object> pt))
+                                throw new FormatException("Each manifest point must be an object.");
                             region.points.Add(new ContactPointManifest
                             {
                                 id = GetString(pt, "id", ""),
-                                u = (float)GetNumber(pt, "u", 0.5),
-                                v = (float)GetNumber(pt, "v", 0.5),
-                                w = (float)GetNumber(pt, "w", 0.5),
-                                radius = (float)GetNumber(pt, "radius", 0.0)
+                                u = GetFloat(pt, "u", 0.5),
+                                v = GetFloat(pt, "v", 0.5),
+                                w = GetFloat(pt, "w", 0.5),
+                                radius = GetFloat(pt, "radius", 0.0)
                             });
                         }
                     }
@@ -78,18 +89,42 @@ namespace Furroxide.ContactCompressor
         // ---- accessors ----
 
         static string GetString(Dictionary<string, object> map, string key, string fallback)
-            => map.TryGetValue(key, out object v) && v is string s ? s : fallback;
+        {
+            if (!map.TryGetValue(key, out object value)) return fallback;
+            if (value is string text) return text;
+            throw new FormatException($"'{key}' must be a string.");
+        }
 
         static double GetNumber(Dictionary<string, object> map, string key, double fallback)
-            => map.TryGetValue(key, out object v) && v is double d ? d : fallback;
+        {
+            if (!map.TryGetValue(key, out object value)) return fallback;
+            if (value is double number) return number;
+            throw new FormatException($"'{key}' must be a number.");
+        }
+
+        static float GetFloat(Dictionary<string, object> map, string key, double fallback)
+            => ToFloat(GetNumber(map, key, fallback), key);
+
+        static float ToFloat(double value, string key)
+        {
+            float result = (float)value;
+            if (float.IsNaN(result) || float.IsInfinity(result))
+                throw new FormatException($"'{key}' must be a finite float.");
+            return result;
+        }
 
         static float[] GetFloats(Dictionary<string, object> map, string key)
         {
             var result = new float[3];
-            if (map.TryGetValue(key, out object v) && v is List<object> list)
-                for (int i = 0; i < 3 && i < list.Count; i++)
-                    if (list[i] is double d)
-                        result[i] = (float)d;
+            if (!map.TryGetValue(key, out object value)) return result;
+            if (!(value is List<object> list) || list.Count != 3)
+                throw new FormatException($"'{key}' must contain exactly three numbers.");
+            for (int i = 0; i < 3; i++)
+            {
+                if (!(list[i] is double number))
+                    throw new FormatException($"'{key}' must contain only numbers.");
+                result[i] = ToFloat(number, key);
+            }
             return result;
         }
 
@@ -99,6 +134,10 @@ namespace Furroxide.ContactCompressor
         {
             readonly string _text;
             int _index;
+            int _depth;
+            static readonly Regex NumberSyntax = new Regex(
+                @"\A-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?\z",
+                RegexOptions.CultureInvariant);
 
             public Reader(string text) { _text = text; }
 
@@ -107,7 +146,8 @@ namespace Furroxide.ContactCompressor
 
             public void SkipWhitespace()
             {
-                while (_index < _text.Length && char.IsWhiteSpace(_text[_index])) _index++;
+                while (_index < _text.Length && (_text[_index] == ' ' || _text[_index] == '\t'
+                       || _text[_index] == '\r' || _text[_index] == '\n')) _index++;
             }
 
             public object ReadValue()
@@ -118,8 +158,13 @@ namespace Furroxide.ContactCompressor
                 char c = _text[_index];
                 switch (c)
                 {
-                    case '{': return ReadObject();
-                    case '[': return ReadArray();
+                    case '{':
+                    case '[':
+                        // Manifests are shallow. Bound recursion so a corrupt config cannot
+                        // terminate the companion with an uncatchable StackOverflowException.
+                        if (++_depth > 64) throw new FormatException("Manifest nesting exceeds 64 levels.");
+                        try { return c == '{' ? (object)ReadObject() : ReadArray(); }
+                        finally { _depth--; }
                     case '"': return ReadString();
                     case 't': Expect("true"); return true;
                     case 'f': Expect("false"); return false;
@@ -149,6 +194,8 @@ namespace Furroxide.ContactCompressor
                         throw new FormatException($"Expected ':' at offset {_index}.");
                     _index++;
 
+                    if (result.ContainsKey(key))
+                        throw new FormatException($"Duplicate object key '{key}'.");
                     result[key] = ReadValue();
                     SkipWhitespace();
 
@@ -193,6 +240,7 @@ namespace Furroxide.ContactCompressor
 
                     if (c == '"') return sb.ToString();
 
+                    if (c < ' ') throw new FormatException("Unescaped control character in string.");
                     if (c != '\\') { sb.Append(c); continue; }
 
                     if (AtEnd) throw new FormatException("Unterminated escape sequence.");
@@ -234,7 +282,9 @@ namespace Furroxide.ContactCompressor
                 string token = _text.Substring(start, _index - start);
 
                 // Invariant culture matters: this runs on machines whose decimal separator is ','.
-                if (!double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out double value))
+                if (!NumberSyntax.IsMatch(token)
+                    || !double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out double value)
+                    || double.IsNaN(value) || double.IsInfinity(value))
                     throw new FormatException($"Invalid number '{token}' at offset {start}.");
 
                 return value;
